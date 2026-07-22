@@ -1,6 +1,7 @@
 // Variáveis globais de controle de filtro e pesquisa da biblioteca
 let currentSearchQuery = '';
 let selectedTagsSet = new Set(['todos']);
+let weightChartInstance = null;
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -13,6 +14,93 @@ document.addEventListener('DOMContentLoaded', () => {
         renderExerciseLibrary();
       });
     }
+  }
+
+  // GERENCIAMENTO DO MODAL DE PERFIL E GRÁFICO DE PESO
+  const modalProfile = document.getElementById('modal-profile');
+  const btnOpenProfile = document.getElementById('btn-open-profile');
+  const closeBtnProfile = document.querySelector('.close-modal-profile');
+  const formProfile = document.getElementById('form-profile');
+
+  if (btnOpenProfile && modalProfile) {
+    btnOpenProfile.addEventListener('click', () => {
+      const profile = DB.getProfile();
+      document.getElementById('profile-name').value = profile.name || '';
+      document.getElementById('profile-gender').value = profile.gender || 'Masculino';
+      document.getElementById('profile-age').value = profile.age || '';
+      document.getElementById('profile-goal').value = profile.goal || '';
+      document.getElementById('profile-height').value = profile.height || '';
+      document.getElementById('profile-weight').value = profile.weight || '';
+
+      modalProfile.classList.remove('hidden');
+      renderWeightChart();
+    });
+  }
+
+  if (closeBtnProfile && modalProfile) {
+    closeBtnProfile.addEventListener('click', () => modalProfile.classList.add('hidden'));
+  }
+
+  if (formProfile) {
+    formProfile.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('profile-name').value;
+      const gender = document.getElementById('profile-gender').value;
+      const age = document.getElementById('profile-age').value;
+      const goal = document.getElementById('profile-goal').value;
+      const height = document.getElementById('profile-height').value;
+      const weight = document.getElementById('profile-weight').value;
+
+      DB.saveProfile({ name, gender, age, goal, height, weight });
+      alert('Ficha técnica e perfil atualizados com sucesso!');
+      renderWeightChart(); // Atualiza o gráfico na mesma hora
+    });
+  }
+
+  function renderWeightChart() {
+    const canvas = document.getElementById('weightChart');
+    if (!canvas) return;
+
+    const historyData = DB.getWeightHistory();
+
+    if (weightChartInstance) {
+      weightChartInstance.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    weightChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: historyData.map(h => h.date),
+        datasets: [{
+          label: 'Peso (kg)',
+          data: historyData.map(h => h.weight),
+          borderColor: '#cc00ff',
+          backgroundColor: 'rgba(204, 0, 255, 0.1)',
+          borderWidth: 2,
+          pointBackgroundColor: '#cc00ff',
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { color: '#8e8f96', font: { size: 10 } }
+          },
+          y: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { color: '#8e8f96', font: { size: 10 } }
+          }
+        }
+      }
+    });
   }
 
   // Ouvinte da barra de pesquisa em tempo real (responsivo a cada letra digitada)
@@ -60,11 +148,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const SVG_CHECK = `<svg class="status-icon-svg completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
   const SVG_CIRCLE = `<svg class="status-icon-svg pending" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>`;
   const SVG_TRASH = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
-
-  // Ícones do Foco
-  const SVG_SUPERIORES = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--neon-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 11c1.5 0 3-1 3-3.5S16 4 14 4c-1.5 0-2.5.8-3.5 2C9.5 4.8 8.5 4 7 4 5 4 3 5.5 3 8s1.5 3.5 3 3.5c1.5 0 2.5-.8 3.5-2 1 1.2 2 2 3.5 2z"/><path d="M6 11.5V16a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-4.5"/><path d="M9 19v2"/><path d="M15 19v2"/></svg>`;
-  const SVG_INFERIORES = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--neon-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2a3 3 0 0 0-3 3v7a4 4 0 0 0 2.5 3.7L7 22h3.5l1.5-6h0.1l1.4 6H17l-1.5-6.3A4 4 0 0 0 18 12V5a3 3 0 0 0-3-3H9z"/></svg>`;
-  const SVG_GERAL = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--neon-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>`;
 
   let currentEditingWorkoutId = null;
   let activeSessionWorkout = null;
@@ -208,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-// 3. EXECUÇÃO DO TREINO (SESSÃO ATIVA COM VALIDAÇÃO E ROTAÇÃO DE FILA)
+  // 3. EXECUÇÃO DO TREINO
   const modalSession = document.getElementById('modal-active-session');
   const closeBtnSession = document.querySelector('.close-modal-session');
 
@@ -374,7 +457,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  // BOTÃO CONCLUIR TREINO COM VALIDAÇÃO, HISTÓRICO E SINCRONIZAÇÃO COMPLETA
   const btnFinishSession = document.getElementById('btn-finish-active-session');
   if (btnFinishSession) {
     btnFinishSession.addEventListener('click', () => {
@@ -397,7 +479,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateStr = now.toISOString().split('T')[0];
         const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-        // 1. Registra no Histórico de Sessões Detalhado
         const sessionHistory = JSON.parse(localStorage.getItem('my_session_history') || '[]');
         sessionHistory.unshift({
           id: Date.now().toString(),
@@ -408,14 +489,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         localStorage.setItem('my_session_history', JSON.stringify(sessionHistory));
 
-        // 2. Sincroniza com o Histórico Geral (Calendário e Streak)
         let history = DB.getHistory();
         if (!history.includes(dateStr)) {
           history.push(dateStr);
           localStorage.setItem('my_history', JSON.stringify(history));
         }
 
-        // 3. Rotação da Fila de Treinos (Joga o treino concluído para o fim da fila)
         let workouts = DB.getWorkouts();
         const currentIndex = workouts.findIndex(w => w.id === activeSessionWorkout.id);
         if (currentIndex !== -1) {
@@ -424,7 +503,6 @@ document.addEventListener('DOMContentLoaded', () => {
           localStorage.setItem('my_workouts', JSON.stringify(workouts));
         }
 
-        // Fecha o modal e atualiza todas as abas sincronizadas
         if (modalSession) modalSession.classList.add('hidden');
         renderHome();
         renderWorkouts();
@@ -433,7 +511,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 4. RENDERIZAR TREINOS E HISTÓRICO EXPANSÍVEL NA ABA "TREINOS"
   function renderWorkouts() {
     const listEl = document.getElementById('workouts-list');
     const historyContainerEl = document.getElementById('workouts-history-container');
@@ -501,7 +578,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }).join('');
     }
 
-    // Renderizar o Histórico Expansível
     if (historyContainerEl) {
       const sessionHistory = JSON.parse(localStorage.getItem('my_session_history') || '[]');
       if (sessionHistory.length === 0) {
@@ -510,18 +586,17 @@ document.addEventListener('DOMContentLoaded', () => {
         historyContainerEl.innerHTML = sessionHistory.map(item => {
           const formattedDate = item.date.split('-').reverse().join('/');
           return `
-            <details class="history-accordion">
-              <summary class="history-summary">
+            <details class="history-accordion" style="background: var(--card-bg, #1e293b); border: 1px solid var(--card-border, #334155); border-radius: 8px; padding: 12px; color: #fff;">
+              <summary class="history-summary" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600;">
                 <span>${item.workoutName}</span>
-                <div class="history-summary-right">
-                  <span class="history-badge-mini">${formattedDate}</span>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 0.75rem; color: var(--neon-accent);">${formattedDate}</span>
                 </div>
               </summary>
-              <div class="history-details-body">
-                <div>Data de Realização: <span>${formattedDate}</span></div>
-                <div>Horário de Término: <span>${item.time}</span></div>
-                <div>Exercícios no Bloco: <span>${item.exercisesCount || 0} exercícios</span></div>
+              <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted, #94a3b8); border-top: 1px dashed var(--card-border, #334155); padding-top: 8px;">
+                <div>Data de Realização: <span style="color:#fff;">${formattedDate}</span></div>
+                <div>Horário de Término: <span style="color:#fff;">${item.time}</span></div>
+                <div>Exercícios no Bloco: <span style="color:#fff;">${item.exercisesCount || 0} exercícios</span></div>
               </div>
             </details>
           `;
@@ -530,234 +605,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 4. RENDERIZAR TREINOS E O HISTÓRICO DE SESSÕES NA ABA "TREINOS"
-  function renderWorkouts() {
-    const listEl = document.getElementById('workouts-list');
-    const historyListEl = document.getElementById('workouts-history-list');
-    if (!listEl) return;
-
-    const workouts = DB.getWorkouts();
-    const library = DB.getExerciseLibrary();
-
-    if (workouts.length === 0) {
-      listEl.innerHTML = '<div class="card-boas-vindas" style="grid-column: 1 / -1;"><p style="text-align:center; color:var(--text-muted);">Nenhum treino criado ainda.</p></div>';
-    } else {
-      const dayNameMap = { '1': 'SEG', '2': 'TER', '3': 'QUA', '4': 'QUI', '5': 'SEX', '6': 'SÁB', '0': 'DOM' };
-      const categoryImages = {
-        'peitoral': 'assets/img/peitoral.png',
-        'costas': 'assets/img/costas.png',
-        'pernas': 'assets/img/pernas.png',
-        'gluteos': 'assets/img/gluteos.png',
-        'geral': 'assets/img/full-body.png'
-      };
-
-      listEl.innerHTML = workouts.map(w => {
-        let allWorkoutTags = [];
-        (w.exercises || []).forEach(exItem => {
-          const found = library.find(l => l.id === exItem.exerciseId);
-          if (found && found.tags) allWorkoutTags.push(...found.tags);
-        });
-
-        const uniqueTags = Array.from(new Set(allWorkoutTags));
-        const tagsHtml = uniqueTags.map(t => `<span class="tag-chip" style="border-color:var(--neon-accent); color:var(--neon-accent);">${t}</span>`).join(' ');
-        const dayText = (w.days || []).map(d => dayNameMap[d] || d).join(', ') || 'SEM DIA';
-        const bgImage = categoryImages[w.category] || 'assets/img/peitoral.png';
-        const menuId = `menu-${w.id}`;
-        const drawerId = `drawer-${w.id}`;
-
-        return `
-          <div class="workout-card-v2">
-            <div class="workout-card-banner" style="background-image: url('${bgImage}');" onclick="window.toggleWorkoutDrawer(event, '${drawerId}')">
-              <div class="workout-banner-top">
-                <span class="workout-day-pill">${dayText}</span>
-                <div style="position: relative;">
-                  <button class="workout-menu-trigger" onclick="window.toggleWorkoutMenu(event, '${menuId}')" title="Opções">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-                  </button>
-                  <div class="workout-dropdown-menu" id="${menuId}">
-                    <button class="workout-dropdown-item" onclick="window.editWorkout('${w.id}')">Editar Treino</button>
-                    <button class="workout-dropdown-item delete" onclick="window.deleteWorkout('${w.id}')">Excluir</button>
-                  </div>
-                </div>
-              </div>
-              <div class="workout-banner-bottom">
-                <h3 class="workout-title-large">${w.name}</h3>
-                <button class="workout-start-btn-circle" onclick="window.startWorkoutSession('${w.id}'); event.stopPropagation();" title="Iniciar Treino">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="#000" stroke="#000" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                </button>
-              </div>
-            </div>
-            <div class="workout-muscles-drawer" id="${drawerId}">
-              <p>Músculos Trabalhados</p>
-              <div style="display:flex; flex-wrap:wrap; gap:6px;">
-                ${tagsHtml || '<span style="color:var(--text-muted); font-size:0.8rem;">Nenhum músculo mapeado</span>'}
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    // Renderizar o Histórico de Sessões abaixo dos treinos
-    if (historyListEl) {
-      const sessionHistory = JSON.parse(localStorage.getItem('my_session_history') || '[]');
-      if (sessionHistory.length === 0) {
-        historyListEl.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:10px;">Nenhuma sessão concluída ainda.</p>';
-      } else {
-        historyListEl.innerHTML = sessionHistory.map(item => `
-          <div class="history-session-card">
-            <div class="history-session-info">
-              <h4>${item.workoutName}</h4>
-              <p>Concluído em ${item.date.split('-').reverse().join('/')} às ${item.time}</p>
-            </div>
-            <span class="history-badge">Finalizado</span>
-          </div>
-        `).join('');
-      }
-    }
-  }
-
-  // Controle de expansão do card de exercício na sessão
-  window.toggleSessionCard = function(cardId) {
-    const card = document.getElementById(cardId);
-    if (card) {
-      card.classList.toggle('active-expanded');
-    }
-  };
-
-  // Lógica progressiva das bolinhas de série
-  window.toggleSeriesDot = function(event, dotElement) {
-    event.stopPropagation();
-    
-    // Se a bolinha estiver inativa (não clicável ainda), não faz nada
-    if (!dotElement.classList.contains('active') && !dotElement.classList.contains('completed')) {
-      return;
-    }
-
-    const container = dotElement.closest('.series-dots-container');
-    const dots = Array.from(container.querySelectorAll('.series-dot'));
-    const currentIndex = dots.indexOf(dotElement);
-
-    if (dotElement.classList.contains('completed')) {
-      // Se já estava completa, desfaz ela e todas as seguintes
-      for (let i = currentIndex; i < dots.length; i++) {
-        dots[i].classList.remove('completed', 'active');
-      }
-      dotElement.classList.add('active');
-    } else {
-      // Se estava ativa, marca como completa e ativa a próxima (se houver)
-      dotElement.classList.remove('active');
-      dotElement.classList.add('completed');
-
-      if (currentIndex + 1 < dots.length) {
-        dots[currentIndex + 1].classList.add('active');
-      }
-    }
-  };
-
-  window.toggleSessionDoneGlobal = function(checkbox, cardId) {
-    const card = document.getElementById(cardId);
-    if (card) {
-      const dots = card.querySelectorAll('.series-dot');
-      if (checkbox.checked) {
-        card.classList.remove('active-expanded');
-        dots.forEach(d => {
-          d.classList.remove('active');
-          d.classList.add('completed');
-        });
-      } else {
-        dots.forEach((d, idx) => {
-          d.classList.remove('completed');
-          if (idx === 0) d.classList.add('active');
-        });
-      }
-    }
-  };
-  
-  // 4. LISTA DE TREINOS NA ABA "TREINOS"
-  function renderWorkouts() {
-    const listEl = document.getElementById('workouts-list');
-    if (!listEl) return;
-
-    const workouts = DB.getWorkouts();
-    const library = DB.getExerciseLibrary();
-
-    if (workouts.length === 0) {
-      listEl.innerHTML = '<div class="card-boas-vindas"><p style="text-align:center; color:var(--text-muted);">Nenhum treino criado ainda.</p></div>';
-      return;
-    }
-
-    const dayNameMap = { '1': 'SEG', '2': 'TER', '3': 'QUA', '4': 'QUI', '5': 'SEX', '6': 'SÁB', '0': 'DOM' };
-
-    const categoryImages = {
-      'peitoral': 'assets/img/peitoral.png',
-      'costas': 'assets/img/costas.png',
-      'pernas': 'assets/img/pernas.png',
-      'gluteos': 'assets/img/gluteos.png',
-      'geral': 'assets/img/full-body.png'
-    };
-
-    listEl.innerHTML = workouts.map(w => {
-      let allWorkoutTags = [];
-      (w.exercises || []).forEach(exItem => {
-        const found = library.find(l => l.id === exItem.exerciseId);
-        if (found && found.tags) {
-          allWorkoutTags.push(...found.tags);
-        }
-      });
-
-      const uniqueTags = Array.from(new Set(allWorkoutTags));
-      const tagsHtml = uniqueTags.map(t => `<span class="tag-chip" style="border-color:var(--neon-accent); color:var(--neon-accent);">${t}</span>`).join(' ');
-      
-      const dayText = (w.days || []).map(d => dayNameMap[d] || d).join(', ') || 'SEM DIA';
-      const bgImage = categoryImages[w.category] || 'assets/img/peitoral.png';
-      
-      const menuId = `menu-${w.id}`;
-      const drawerId = `drawer-${w.id}`;
-
-      return `
-        <div class="workout-card-v2">
-          <!-- Banner Principal com a Foto de Fundo -->
-          <div class="workout-card-banner" style="background-image: url('${bgImage}');" onclick="window.toggleWorkoutDrawer(event, '${drawerId}')">
-            
-            <div class="workout-banner-top">
-              <span class="workout-day-pill">${dayText}</span>
-              
-              <div style="position: relative;">
-                <button class="workout-menu-trigger" onclick="window.toggleWorkoutMenu(event, '${menuId}')" title="Opções">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-                </button>
-                
-                <!-- Menu Dropdown (Editar / Excluir) -->
-                <div class="workout-dropdown-menu" id="${menuId}">
-                  <button class="workout-dropdown-item" onclick="window.editWorkout('${w.id}')">Editar Treino</button>
-                  <button class="workout-dropdown-item delete" onclick="window.deleteWorkout('${w.id}')">Excluir</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="workout-banner-bottom">
-              <h3 class="workout-title-large">${w.name}</h3>
-              <button class="workout-start-btn-circle" onclick="window.startWorkoutSession('${w.id}'); event.stopPropagation();" title="Iniciar Treino">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="#000" stroke="#000" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-              </button>
-            </div>
-
-          </div>
-
-          <!-- Gaveta Expansível Isolada -->
-          <div class="workout-muscles-drawer" id="${drawerId}">
-            <p>Músculos Trabalhados</p>
-            <div style="display:flex; flex-wrap:wrap; gap:6px;">
-              ${tagsHtml || '<span style="color:var(--text-muted); font-size:0.8rem;">Nenhum músculo mapeado</span>'}
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  // Funções globais de controle isolado de treinos
   window.toggleWorkoutMenu = function(event, menuId) {
     event.stopPropagation();
     document.querySelectorAll('.workout-dropdown-menu').forEach(m => {
@@ -847,7 +694,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Modais de Dias de Ofensiva
   const modalConfigDays = document.getElementById('modal-config-days');
   const btnOpenConfigDays = document.getElementById('btn-open-config-days');
   const closeBtnConfigDays = document.querySelector('.close-modal-config-days');
@@ -1096,7 +942,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderExerciseLibrary();
 });
 
-// Função global fora do DOMContentLoaded para garantir acesso universal e responsivo à busca/filtros
 function renderExerciseLibrary() {
   const listEl = document.getElementById('exercises-library-list');
   if (!listEl) return;
@@ -1104,10 +949,8 @@ function renderExerciseLibrary() {
   const allExercises = DB.getExerciseLibrary();
 
   const exercises = allExercises.filter(ex => {
-    // 1. Busca textual instantânea (ex: digitar "halt" encontra "halteres")
     const matchesName = ex.name.toLowerCase().includes(currentSearchQuery);
 
-    // 2. Filtro de múltiplas tags de músculos selecionadas simultaneamente
     let matchesTags = true;
     if (!selectedTagsSet.has('todos') && selectedTagsSet.size > 0) {
       const exTags = (ex.tags || []).map(t => t.toLowerCase());

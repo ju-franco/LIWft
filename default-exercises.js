@@ -20,33 +20,65 @@ const DEFAULT_EXERCISES = [
 
 */
 
+/*
+{
+    name: "",
+    en: "",
+    executionVideo: "",
+    muscleImg: "",
+    tags: ["Posterior de Coxa", "Glúteo"]
+  },
+*/
+
+
+
   // PEITO                       // O nome do exercício em inglês é usado para buscar o GIF da execução e o mapeamento dos músculos trabalhados na API anatome.dev.
   { name: "Supino Reto com Barra", en: "Bench Press" },
   { name: "Supino Inclinado com Halteres", en: "Incline Dumbbell Press" },
-  { name: "Supino Inclinado com Barra", en: "Incline Bench Press" },
+  { name: "Supino Inclinado com Barra", en: "Barbell Incline Bench Press - Medium Grip" },
+  { name: "Supino na Máquina", en: "Leverage Chest Press" },
   { name: "Crucifixo Reto", en: "Dumbbell Fly" },
-  { name: "Peck Deck / Voador", en: "Butterfly" },
+  { name: "Crucifixo na Máquina", en: "Butterfly" },
   { name: "Crossover na Polia High-to-Low", en: "Cable Crossover" },
 
   // COSTAS
   { name: "Puxada Alta Pronada", en: "Wide-Grip Lat Pulldown" },
+  { name: "Puxada Alta com Triângulo", en: "V-Bar Pulldown" },
   { name: "Remada Baixa", en: "Seated Cable Row" },
   { name: "Remada Curvada", en: "Bent Over Row" },
   { name: "Remada Unilateral (Serrote)", en: "Dumbbell Row" },
   { name: "Remada Cavalinho", en: "T-Bar Row" },
 
   // BÍCEPS E TRÍCEPS
-  { name: "Rosca Direta na Polia", en: "Cable Curl" },
+
+  {
+    name: "Rosca Direta na Polia",
+    en: "",
+    executionVideo: "https://i.makeagif.com/media/3-05-2016/JXscRj.gif",
+    muscleImg: "https://api.anatome.dev/generateImage?gender=male&view=dual&layers=DC2626%3Abiceps&width=768&height=1024&output=raw&contour=on&contour_color=%23e5e7eb&contour_stroke=%23dadada&contour_width=2",
+    tags: ["Bíceps"]
+  },
+  {
+    name: "Rosca Inversa na Polia",
+    en: "",
+    executionVideo: "https://www.image2url.com/r2/default/gifs/1784742220458-d4262400-e5ed-4ac6-b376-b24456cb5a82.gif",
+    muscleImg: "https://api.anatome.dev/generateImage?gender=male&view=dual&layers=DC2626%3Abiceps&width=768&height=1024&output=raw&contour=on&contour_color=%23e5e7eb&contour_stroke=%23dadada&contour_width=2",
+    tags: ["Bíceps"]
+  },
   { name: "Rosca Direta com Barra", en: "Barbell Curl" },
+  { name: "Rosca Concentrada", en: "Concentration Curls" },
   { name: "Rosca Alternada com Halteres", en: "Dumbbell Curl" },
   { name: "Rosca Martelo", en: "Hammer Curl" },
   { name: "Rosca Scott", en: "Preacher Curl" },
   { name: "Tríceps Corda", en: "Triceps Pushdown" },
   { name: "Tríceps Testa", en: "Skullcrusher" },
+  { name: "Tríceps na Máquina", en: "Dip Machine" },
+  { name: "Tríceps Francês com Halter", en: "Decline Dumbbell Triceps Extension" },
+
 
   // PERNAS E GLÚTEOS
   { name: "Leg Press 45", en: "Leg Press" },
-  { name: "Agachamento Livre", en: "Barbell Squat" },
+  { name: "Agachamento Livre com Barra", en: "Barbell Squat" },
   { name: "Cadeira Extensora", en: "Leg Extension" },
   { name: "Cadeira Flexora", en: "Seated Leg Curl" },
   { name: "Mesa Flexora", en: "Lying Leg Curl" },
@@ -56,6 +88,9 @@ const DEFAULT_EXERCISES = [
   { name: "Stiff com Barra", en: "Barbell Deadlift" },
   { name: "Cadeira Abdutora", en: "Thigh Abductor" },
   { name: "Cadeira Adutora", en: "Thigh Adductor" }, 
+  { name: "Coice na Polia", en: "One-Legged Cable Kickback" },
+  { name: "Agachamento Hack", en: "Hack Squat" },
+  { name: "Panturrilha no Leg Press  45", en: "Calf Press On The Leg Press Machine" },
   {
     name: "Coice na Máquina",
     en: "",
@@ -63,11 +98,19 @@ const DEFAULT_EXERCISES = [
     muscleImg: "https://api.anatome.dev/generateImage?gender=male&view=dual&layers=DC2626%3Agluteal%7CF59E0B%3Ahamstring&width=768&height=1024&output=raw&contour=on&contour_color=%23e5e7eb&contour_stroke=%23dadada&contour_width=2",
     tags: ["Posterior de Coxa", "Glúteo"]
   },
+  {
+    name: "Leg Press Horizontal",
+    en: "",
+    executionVideo: "https://cdn.fisiculturismo.com.br/monthly_2017_03/leg-press-horizontal-animacao.gif.d9ac3b4d0e63b85884226242e3679564.gif",
+    muscleImg: "https://api.anatome.dev/generateImage?gender=male&view=dual&layers=DC2626%3Aquadriceps%7CF59E0B%3Acalves%2Cgluteal%2Chamstring&width=768&height=1024&output=raw&contour=on&contour_color=%23e5e7eb&contour_stroke=%23dadada&contour_width=2",
+    tags: ["Quadríceps","Posterior de Coxa", "Glúteo", "Panturrilha"]
+  },
 
   // OMBROS
   { name: "Elevação Lateral", en: "Lateral Raise" },
-  { name: "Elevação Frontal", en: "Front Raise" },
+  { name: "Elevação Frontal", en: "Alternating Deltoid Raise" },
   { name: "Desenvolvimento com Halteres", en: "Dumbbell Shoulder Press" },
+  { name: "Desenvolvimento na Máquina", en: "Leverage Shoulder Press" },
   { name: "Desenvolvimento Arnold", en: "Arnold Press" },
   { name: "Crucifixo Inverso", en: "Reverse Machine Flyes" },
 

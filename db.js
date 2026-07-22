@@ -1,4 +1,3 @@
-// Dicionário de tradução dos slugs que a API retorna (mantido apenas para traduzir o resultado final para o Português)
 const SLUG_TO_PT = {
   'chest': 'Peito',
   'pecs': 'Peito',
@@ -29,18 +28,12 @@ const SLUG_TO_PT = {
 };
 
 const DB = {
-  setupDatalist() {
-    // Mantido limpo
-  },
+  setupDatalist() {},
 
   async fetchAnatomeData(exerciseName) {
     const cleanName = (exerciseName || '').trim();
-    
-    // Procura o exercício diretamente na lista unificada de defaults para ver se tem tradução em inglês
     const defaultDefs = typeof DEFAULT_EXERCISES !== 'undefined' ? DEFAULT_EXERCISES : [];
     const foundDefault = defaultDefs.find(item => item.name.toLowerCase() === cleanName.toLowerCase());
-    
-    // Se encontrou e tem 'en' preenchido, usa ele; senão usa o próprio nome em PT-BR
     const queryEn = (foundDefault && foundDefault.en) ? foundDefault.en : cleanName;
 
     try {
@@ -92,6 +85,35 @@ const DB = {
     return { anatomy: '', execution: '', tags: [] };
   },
 
+  getProfile() {
+    return JSON.parse(localStorage.getItem('my_athlete_profile') || '{"name":"","gender":"Masculino","age":"","goal":"","height":"","weight":""}');
+  },
+
+  saveProfile(profile) {
+    localStorage.setItem('my_athlete_profile', JSON.stringify(profile));
+
+    // Adiciona um novo ponto no histórico de peso com data e horário a cada alteração
+    if (profile.weight !== '' && !isNaN(parseFloat(profile.weight))) {
+      let weightHistory = JSON.parse(localStorage.getItem('my_weight_history') || '[]');
+      
+      const now = new Date();
+      const dateLabel = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      
+      weightHistory.push({ date: dateLabel, weight: parseFloat(profile.weight) });
+      localStorage.setItem('my_weight_history', JSON.stringify(weightHistory));
+    }
+  },
+
+  getWeightHistory() {
+    let history = JSON.parse(localStorage.getItem('my_weight_history') || '[]');
+    if (history.length === 0) {
+      history = [
+        { date: 'Início', weight: 70.0 }
+      ];
+    }
+    return history;
+  },
+
   getExerciseLibrary() {
     const userExercises = JSON.parse(localStorage.getItem('my_user_exercises') || '[]');
     const cachedDefaults = JSON.parse(localStorage.getItem('my_cached_defaults') || '[]');
@@ -106,8 +128,6 @@ const DB = {
 
     for (let i = 0; i < rawDefaults.length; i++) {
       const item = rawDefaults[i];
-      
-      // Se você preencheu manualmente no default-exercises.js, o app respeita e usa direto
       if (item.executionVideo || item.muscleImg || (item.tags && item.tags.length > 0)) {
         processedList.push({
           id: 'def-' + i,
@@ -117,7 +137,6 @@ const DB = {
           executionVideo: item.executionVideo || item.url || ''
         });
       } else {
-        // Senão, busca automaticamente na API
         const anatomeData = await this.fetchAnatomeData(item.name);
         processedList.push({
           id: 'def-' + i,
@@ -223,7 +242,7 @@ const DB = {
     }
 
     let daysBack = 1;
-    daysBack <= 365 && (() => {
+    while (daysBack <= 365) {
       let pastDate = new Date();
       pastDate.setHours(0, 0, 0, 0);
       pastDate.setDate(pastDate.getDate() - daysBack);
@@ -235,11 +254,11 @@ const DB = {
         if (history.includes(pastStr)) {
           streak++;
         } else {
-          return false;
+          break;
         }
       }
       daysBack++;
-    })();
+    }
 
     return streak;
   }
