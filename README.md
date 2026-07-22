@@ -20,6 +20,15 @@ O *LIWft* foi projetado para oferecer controle total sobre os treinos diários e
 
 ---
 
+## 💻 `Telas Principais`
+
+
+| Telas do LIWft | Telas do LIWft |
+| :---: | :---: |
+| <img src="assets/telas/telas-LIWft1.png" alt="Telas do LIWft" width="500"/> | <img src="assets/telas/telas-LIWft2.png" alt="Telas do LIWft" width="500"/> | 
+
+---
+
 ## 📱 `Funcionamento PWA e Como Usar no iPhone`
 
 Embora seja uma aplicação hospedada na web, o *LIWft* utiliza tecnologias de **Progressive Web App (PWA)**, contando com um **Service Worker** para cache de ativos e funcionamento offline, além de metadados de instalação configurados no `manifest.json`.
