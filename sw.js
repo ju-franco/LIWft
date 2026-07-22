@@ -44,25 +44,23 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Intercepta as requisições (incluindo os GIFs e a API de anatomia)
+// Intercepta as requisições (incluindo GIFs externos e APIs)
 self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
 
-  // Se for requisição externa (como a anatome.dev ou GIFs externos), usa estratégia Cache First com atualização em background
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Retorna do cache se estiver disponível offline
         return cachedResponse;
       }
 
-      // Se não estiver no cache, busca na rede e salva uma cópia localmente
       return fetch(event.request).then((networkResponse) => {
-        // Verifica se a resposta é válida antes de cachear
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic' && !requestUrl.origin.includes('anatome.dev') && !requestUrl.origin.includes('makeagif') && !requestUrl.origin.includes('image2url') && !requestUrl.origin.includes('fisiculturismo') && !requestUrl.origin.includes('karoldeliberato')) {
+        // Se a resposta não for válida, apenas retorna sem quebrar
+        if (!networkResponse || networkResponse.status !== 200) {
           return networkResponse;
         }
 
+        // Clona e salva em cache dinamicamente qualquer imagem ou requisição bem-sucedida
         const responseToCache = networkResponse.clone();
         caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, responseToCache);
@@ -70,7 +68,6 @@ self.addEventListener('fetch', (event) => {
 
         return networkResponse;
       }).catch(() => {
-        // Fallback caso esteja offline e o recurso não esteja no cache
         return caches.match('./index.html');
       });
     })
