@@ -3,6 +3,19 @@ let currentSearchQuery = '';
 let selectedTagsSet = new Set(['todos']);
 let weightChartInstance = null;
 
+// Registra o Service Worker para habilitar o cache offline e PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then((registration) => {
+        console.log('Service Worker registrado com sucesso! Escopo:', registration.scope);
+      })
+      .catch((error) => {
+        console.log('Falha ao registrar o Service Worker:', error);
+      });
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
 
   if (typeof DB !== 'undefined') {
