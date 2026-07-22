@@ -1,8 +1,6 @@
 # 🏋️ `LIWft: Ficha de Treino e Gestão de Performance (WEB/PWA)`
 
-<div align="center">
-  <img src="assets/logo-LIWft.png" alt="Logo LIWft" width="200px"/>
-</div>
+<img src="assets/logo-LIWft.png" alt="Logo LIWft" width="140px"/>
 
 > Este é um projeto desenvolvido **100% para uso pessoal**, criado do zero para suprir necessidades específicas da minha rotina de treinos que aplicativos comerciais tradicionais não atendiam, seja por falta de flexibilidade, poluição visual, excesso de recursos desnecessários ou modelos de cobrança abusivos (planos *premium* pagos). O sistema foi desenhado exatamente com base nas minhas preferências de usabilidade, estética escura moderna e fluxo direto de treino.
 
