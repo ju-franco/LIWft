@@ -1167,3 +1167,36 @@ input:checked + .slider:before {
   color: var(--text-main);
   font-weight: 600;
 }
+
+/* Evita zoom acidental em toques duplos no celular */
+* {
+  touch-action: manipulation;
+}
+
+/* Restaura e padroniza a estilização dos campos select para não ficarem finos */
+select.select-exercise, 
+select#profile-gender,
+select#workout-category {
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-main);
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8f96' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+  cursor: pointer;
+}
+
+select.select-exercise:focus, 
+select#profile-gender:focus,
+select#workout-category:focus {
+  border-color: var(--neon-accent);
+}

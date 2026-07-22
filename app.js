@@ -829,6 +829,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!containerExWorkout) return;
     const library = DB.getExerciseLibrary();
 
+    // Ordena os exercícios alfabeticamente pelo nome
+    const sortedLibrary = [...library].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
     const row = document.createElement('div');
     row.className = 'exercise-row-form';
     row.innerHTML = `
@@ -837,7 +840,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <button type="button" class="btn-remove-ex">Remover</button>
       </div>
       <select class="select-exercise">
-        ${library.map(ex => `<option value="${ex.id}" ${exData && exData.exerciseId === ex.id ? 'selected' : ''}>${ex.name}</option>`).join('')}
+        ${sortedLibrary.map(ex => `<option value="${ex.id}" ${exData && exData.exerciseId === ex.id ? 'selected' : ''}>${ex.name}</option>`).join('')}
       </select>
       <div style="display:flex; gap:8px">
         <input type="text" placeholder="Séries (ex: 4)" class="workout-sets" value="${exData ? exData.sets : ''}" style="width:33%; padding:8px; background:var(--card-bg); border:1px solid var(--card-border); color:white; border-radius:6px;">
