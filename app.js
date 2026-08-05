@@ -1,7 +1,8 @@
 // Variáveis globais de controle de filtro e pesquisa da biblioteca
 let currentSearchQuery = '';
 let selectedTagsSet = new Set(['todos']);
-let weightChartInstance = null;
+let weightChartInst
+const SVG_TRASH = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
 
 // Registra o Service Worker para habilitar o cache offline e PWA
 if ('serviceWorker' in navigator) {
@@ -165,6 +166,11 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentEditingWorkoutId = null;
   let activeSessionWorkout = null;
 
+  let activeSessionTimer = null;
+  let sessionStartTime = null;
+
+
+
   // 1. NAVEGAÇÃO DE ABAS
   const navItems = document.querySelectorAll('.nav-item');
   const tabContents = document.querySelectorAll('.tab-content');
@@ -309,16 +315,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeBtnSession = document.querySelector('.close-modal-session');
 
   if (closeBtnSession && modalSession) {
-    closeBtnSession.addEventListener('click', () => modalSession.classList.add('hidden'));
+    closeBtnSession.addEventListener('click', () => {
+      modalSession.classList.add('hidden');
+      // Zera o temporizador ao fechar/cancelar
+      if (activeSessionTimer) {
+        clearInterval(activeSessionTimer);
+        activeSessionTimer = null;
+      }
+    });
   }
-
-  window.startWorkoutSession = function(workoutId) {
-    const workouts = DB.getWorkouts();
-    const workout = workouts.find(w => w.id === workoutId);
-    if (workout) {
-      openActiveSessionModal(workout);
-    }
-  };
 
   function openActiveSessionModal(workout) {
     activeSessionWorkout = workout;
@@ -326,6 +331,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('session-workout-title').textContent = workout.name;
     document.getElementById('session-workout-subtitle').textContent = `${workout.exercises ? workout.exercises.length : 0} EXERCÍCIOS`;
+
+    // --- INÍCIO DA LÓGICA DO TEMPORIZADOR ---
+    const timerEl = document.getElementById('session-timer');
+    if (timerEl) timerEl.textContent = '00:00';
+    
+    sessionStartTime = Date.now();
+    if (activeSessionTimer) clearInterval(activeSessionTimer);
+    
+    activeSessionTimer = setInterval(() => {
+      if (!sessionStartTime || !timerEl) return;
+      
+      const diffInSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+      const minutes = String(Math.floor(diffInSeconds / 60)).padStart(2, '0');
+      const seconds = String(diffInSeconds % 60).padStart(2, '0');
+      
+      // Se passar de 1 hora, ajusta a formatação para HH:MM:SS
+      if (diffInSeconds >= 3600) {
+        const hours = String(Math.floor(diffInSeconds / 3600)).padStart(2, '0');
+        const remainingMins = String(Math.floor((diffInSeconds % 3600) / 60)).padStart(2, '0');
+        timerEl.textContent = `${hours}:${remainingMins}:${seconds}`;
+      } else {
+        timerEl.textContent = `${minutes}:${seconds}`;
+      }
+    }, 1000);
+    // --- FIM DA LÓGICA DO TEMPORIZADOR ---
 
     const container = document.getElementById('session-exercises-checklist');
     container.innerHTML = (workout.exercises || []).map((exItem, idx) => {
@@ -488,6 +518,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (confirm(`Deseja realmente concluir e salvar o treino "${activeSessionWorkout.name}"?`)) {
+        
+        // --- PARA O TEMPORIZADOR AQUI ---
+        if (activeSessionTimer) {
+          clearInterval(activeSessionTimer);
+          activeSessionTimer = null;
+        }
+        // --------------------------------
+
         const now = new Date();
         const dateStr = now.toISOString().split('T')[0];
         const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -523,6 +561,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  window.startWorkoutSession = function(workoutId) {
+    const workouts = DB.getWorkouts();
+    const workout = workouts.find(w => w.id === workoutId);
+    if (workout) {
+      openActiveSessionModal(workout);
+    }
+  };
 
   function renderWorkouts() {
     const listEl = document.getElementById('workouts-list');
