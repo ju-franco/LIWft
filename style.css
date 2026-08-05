@@ -18,12 +18,35 @@
   padding: 0;
   font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
-input, textarea, select {
-  user-select: text;
-  -webkit-user-select: text;
-  -webkit-touch-callout: default;
+
+/* 1. Garanta que o body e a estrutura principal permitam interações */
+body, html, main, #app {
+  -webkit-user-select: auto !important;
+  user-select: auto !important;
+}
+
+/* 2. Force a liberação total de cliques e digitação para formulários */
+input, 
+textarea, 
+select,
+[contenteditable="true"] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  pointer-events: auto !important;
+  cursor: text;
+}
+
+/* 3. Bloqueie a seleção de texto APENAS nos elementos visuais/não-clicáveis */
+button, 
+a, 
+img, 
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 html, body {
