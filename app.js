@@ -737,6 +737,8 @@ document.addEventListener("DOMContentLoaded", () => {
       };
       const categoryImages = {
         peitoral: "assets/img/peitoral.png",
+        biceps: "assets/img/biceps.png",
+        ombros: "assets/img/ombros.png",
         costas: "assets/img/costas.png",
         pernas: "assets/img/pernas.png",
         gluteos: "assets/img/gluteos.png",
