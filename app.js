@@ -1,7 +1,7 @@
 // Variáveis globais de controle de filtro e pesquisa da biblioteca
 let currentSearchQuery = "";
 let selectedTagsSet = new Set(["todos"]);
-let weightChartInst;
+let weightChartInstance;
 
 // Ícones SVG globais para acesso em qualquer função
 const SVG_CHECK = `<svg class="status-icon-svg completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -25,6 +25,25 @@ if ("serviceWorker" in navigator) {
       });
   });
 }
+
+// Função para minimizar o treino
+window.minimizeSession = function() {
+  const modal = document.getElementById("modal-active-session");
+  const minibar = document.getElementById("minimized-workout-bar");
+  
+  if (modal) modal.classList.add("hidden");
+  if (minibar) minibar.classList.remove("hidden");
+};
+
+// Função para restaurar o treino
+window.restoreSession = function() {
+  const modal = document.getElementById("modal-active-session");
+  const minibar = document.getElementById("minimized-workout-bar");
+  
+  if (modal) modal.classList.remove("hidden");
+  if (minibar) minibar.classList.add("hidden");
+};
+window.restoreActiveSession = window.restoreSession;
 
 document.addEventListener("DOMContentLoaded", () => {
   if (typeof DB !== "undefined") {
@@ -78,7 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       DB.saveProfile({ name, gender, age, goal, height, weight });
       alert("Ficha técnica e perfil atualizados com sucesso!");
-      renderWeightChart(); // Atualiza o gráfico na mesma hora
+      renderWeightChart();
     });
   }
 
@@ -130,7 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Ouvinte da barra de pesquisa em tempo real (responsivo a cada letra digitada)
+  // Ouvinte da barra de pesquisa em tempo real
   const searchInput = document.getElementById("input-search-exercise");
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
@@ -177,17 +196,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Ícones SVG
-  const SVG_CHECK = `<svg class="status-icon-svg completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-  const SVG_CIRCLE = `<svg class="status-icon-svg pending" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>`;
-  const SVG_TRASH = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
-  const SVG_PENCIL = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
   let currentEditingWorkoutId = null;
   let activeSessionWorkout = null;
-  let currentEditingSessionExerciseIndex = null; // Adicionado para rastrear qual exercício está sendo editado
+  let currentEditingSessionExerciseIndex = null;
 
   let activeSessionTimer = null;
   let sessionStartTime = null;
+
+  // Evento para o botão de minimizar no cabeçalho do modal ativo
+  const btnMinimizeSession = document.getElementById("btn-minimize-session");
+  if (btnMinimizeSession) {
+    btnMinimizeSession.addEventListener("click", () => {
+      window.minimizeSession();
+    });
+  }
 
   // 1. NAVEGAÇÃO DE ABAS
   const navItems = document.querySelectorAll(".nav-item");
@@ -350,7 +372,7 @@ document.addEventListener("DOMContentLoaded", () => {
         clearInterval(activeSessionTimer);
         activeSessionTimer = null;
       }
-      sessionStartTime = null; // Reseta o tempo para o próximo treino
+      sessionStartTime = null;
     });
   }
 
@@ -362,7 +384,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("session-workout-subtitle").textContent =
       `${workout.exercises ? workout.exercises.length : 0} EXERCÍCIOS`;
 
-    // --- TEMPORIZADOR RESILIENTE A RE-RENDERIZAÇÕES ---
     const timerEl = document.getElementById("session-timer");
     if (timerEl && !sessionStartTime) {
       timerEl.textContent = "00:00";
@@ -383,10 +404,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const seconds = String(diffInSeconds % 60).padStart(2, "0");
 
         if (diffInSeconds >= 3600) {
-          const hours = String(Math.floor(diffInSeconds / 3600)).padStart(
-            2,
-            "0",
-          );
+          const hours = String(Math.floor(diffInSeconds / 3600)).padStart(2, "0");
           const remainingMins = String(
             Math.floor((diffInSeconds % 3600) / 60),
           ).padStart(2, "0");
@@ -394,9 +412,13 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
           timerEl.textContent = `${minutes}:${seconds}`;
         }
+
+        const miniTimerEl = document.getElementById("minibars-timer");
+        if (miniTimerEl) {
+          miniTimerEl.textContent = timerEl.textContent;
+        }
       }, 1000);
     }
-    // --------------------------------------------------
 
     const container = document.getElementById("session-exercises-checklist");
     container.innerHTML = (workout.exercises || [])
@@ -455,7 +477,6 @@ document.addEventListener("DOMContentLoaded", () => {
               </div>
             </div>
             
-            <!-- Grupo à direita: Ícone de edição + Switch de concluído -->
             <div style="display: flex; align-items: center; gap: 10px;">
               <button type="button" class="btn-edit-active-ex" onclick="window.editActiveSessionExercise(event, ${idx})" style="background: none; border: none; color: var(--neon-accent); cursor: pointer; display: flex; align-items: center; padding: 4px;" title="Editar Carga, Séries e Repetições">
                 ${SVG_PENCIL}
@@ -504,7 +525,11 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .join("");
 
+    const modalSession = document.getElementById("modal-active-session");
+    const minibar = document.getElementById("minimized-workout-bar");
+    
     if (modalSession) modalSession.classList.remove("hidden");
+    if (minibar) minibar.classList.add("hidden");
   }
 
   window.toggleSessionCard = function (cardId) {
@@ -563,7 +588,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  // --- GERENCIAMENTO DO MODAL DE EDIÇÃO NA SESSÃO ATIVA ---
   const modalEditActiveEx = document.getElementById('modal-edit-active-exercise');
   const closeBtnEditActive = document.querySelector('.close-modal-edit-active');
   const formEditActiveEx = document.getElementById('form-edit-active-exercise');
@@ -581,7 +605,6 @@ document.addEventListener("DOMContentLoaded", () => {
     currentEditingSessionExerciseIndex = idx;
     const currentEx = activeSessionWorkout.exercises[idx];
 
-    // Preenche os campos do modal com os valores atuais
     document.getElementById('edit-active-sets').value = currentEx.sets || '';
     document.getElementById('edit-active-reps').value = currentEx.reps || '';
     document.getElementById('edit-active-weight').value = currentEx.weight || '';
@@ -591,7 +614,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
- if (formEditActiveEx) {
+  if (formEditActiveEx) {
     formEditActiveEx.addEventListener('submit', (e) => {
       e.preventDefault();
       if (currentEditingSessionExerciseIndex === null || !activeSessionWorkout) return;
@@ -600,12 +623,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const newReps = document.getElementById('edit-active-reps').value;
       const newWeight = document.getElementById('edit-active-weight').value;
 
-      // Atualiza os dados no objeto do treino ativo
       activeSessionWorkout.exercises[currentEditingSessionExerciseIndex].sets = newSets;
       activeSessionWorkout.exercises[currentEditingSessionExerciseIndex].reps = newReps;
       activeSessionWorkout.exercises[currentEditingSessionExerciseIndex].weight = newWeight;
 
-      // PERSISTÊNCIA: Salva as novas cargas/séries permanentemente no localStorage
       let workouts = DB.getWorkouts();
       const workoutIndex = workouts.findIndex((w) => w.id === activeSessionWorkout.id);
       if (workoutIndex !== -1) {
@@ -617,7 +638,6 @@ document.addEventListener("DOMContentLoaded", () => {
         modalEditActiveEx.classList.add('hidden');
       }
 
-      // Atualiza a interface do treino ativo mantendo o cronômetro intacto
       openActiveSessionModal(activeSessionWorkout);
     });
   }
@@ -648,12 +668,10 @@ document.addEventListener("DOMContentLoaded", () => {
           `Deseja realmente concluir e salvar o treino "${activeSessionWorkout.name}"?`,
         )
       ) {
-        // --- PARA O TEMPORIZADOR AQUI ---
         if (activeSessionTimer) {
           clearInterval(activeSessionTimer);
           activeSessionTimer = null;
         }
-        // --------------------------------
 
         const now = new Date();
         const dateStr = now.toISOString().split("T")[0];
@@ -690,7 +708,7 @@ document.addEventListener("DOMContentLoaded", () => {
           (w) => w.id === activeSessionWorkout.id,
         );
         if (currentIndex !== -1) {
-          workouts[currentIndex] = activeSessionWorkout; // Atualiza o treino com as modificações e cargas feitas na sessão ativa
+          workouts[currentIndex] = activeSessionWorkout;
           const completedWorkout = workouts.splice(currentIndex, 1)[0];
           workouts.push(completedWorkout);
           localStorage.setItem("my_workouts", JSON.stringify(workouts));
@@ -891,18 +909,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const month = currentCalendarDate.getMonth();
 
     const monthNames = [
-      "Janeiro",
-      "Fevereiro",
-      "Março",
-      "Abril",
-      "Maio",
-      "Junho",
-      "Julho",
-      "Agosto",
-      "Setembro",
-      "Outubro",
-      "Novembro",
-      "Dezembro",
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
     ];
     const monthNameEl = document.getElementById("calendar-month-name");
     if (monthNameEl) monthNameEl.textContent = `${monthNames[month]} ${year}`;
@@ -1090,7 +1098,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!containerExWorkout) return;
     const library = DB.getExerciseLibrary();
 
-    // Ordena os exercícios alfabeticamente pelo nome
     const sortedLibrary = [...library].sort((a, b) =>
       a.name.localeCompare(b.name, "pt-BR"),
     );

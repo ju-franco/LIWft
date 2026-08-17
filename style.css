@@ -21,7 +21,6 @@
   user-select: none;
 }
 
-
 /* 1. Garanta que o body e a estrutura principal permitam interações */
 body, html, main, #app {
   -webkit-user-select: auto !important;
@@ -54,7 +53,6 @@ html, body {
   height: 100dvh;
   width: 100%;
   overflow: hidden;
-  /* Garante o preenchimento correto em telas com notch/Dynamic Island */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
   background-color: var(--bg-color);
@@ -1227,4 +1225,54 @@ select.select-exercise:focus,
 select#profile-gender:focus,
 select#workout-category:focus {
   border-color: var(--neon-accent);
+}
+
+/* BARRA FLUTUANTE DE TREINO MINIMIZADO */
+.minimized-workout-bar {
+  position: fixed;
+  bottom: calc(64px + env(safe-area-inset-bottom) + 10px);
+  left: 12px;
+  right: 12px;
+  background: var(--card-bg, #18191e);
+  border: 1px solid var(--neon-accent);
+  border-radius: var(--radius-md, 14px);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 9999;
+  box-shadow: 0 10px 30px var(--neon-glow);
+  animation: slideUpBar 0.3s ease;
+}
+
+.minimized-workout-bar.hidden {
+  display: none !important;
+}
+
+.minimized-workout-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.minimized-pulse-dot {
+  width: 12px;
+  height: 12px;
+  background-color: var(--neon-accent);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--neon-accent);
+  animation: pulseDot 1.5s infinite;
+}
+
+@keyframes pulseDot {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 16px var(--neon-accent); }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+@keyframes slideUpBar {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }

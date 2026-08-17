@@ -468,72 +468,73 @@
     <!-- MODAL EXECUTAR TREINO (SESSÃO ATIVA COM CHECKLIST) -->
     <div id="modal-active-session" class="modal hidden">
       <div class="modal-content">
+        <!-- MODAL HEADER ATUALIZADO COM BOTÃO DE MINIMIZAR -->
         <div class="modal-header">
           <div>
-            <h3 id="session-workout-title">Treino em Andamento</h3>
-            <span
-              id="session-workout-subtitle"
-              style="
-                font-size: 0.8rem;
-                color: var(--neon-accent);
-                font-weight: 700;
-              "
-            ></span>
+            <h3 id="session-workout-title" style="font-size: 1.2rem;">Treino</h3>
+            <span id="session-workout-subtitle" style="font-size: 0.75rem; color: var(--text-muted);">EXERCÍCIOS</span>
           </div>
           
-          <!-- MODAL EDITAR EXERCÍCIO DA SESSÃO ATIVA -->
-    <div id="modal-edit-active-exercise" class="modal hidden">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Editar Exercício (Sessão Ativa)</h3>
-          <button class="btn-close close-modal-edit-active">&times;</button>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <!-- Display do temporizador -->
+            <div id="session-timer" style="font-size: 1.1rem; font-weight: 800; color: var(--neon-accent); margin-right: 5px;">00:00</div>
+            
+            <!-- Botão Minimizar -->
+            <button type="button" class="btn-close" id="btn-minimize-session" title="Minimizar Treino" style="font-size: 1rem;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+            </button>
+            
+            <button class="btn-close close-modal-session">&times;</button>
+          </div>
         </div>
-        <form id="form-edit-active-exercise">
-          <div class="form-group">
-            <label>Séries</label>
-            <input
-              type="text"
-              id="edit-active-sets"
-              placeholder="Ex: 4"
-              autocomplete="off"
-              required
-            />
-          </div>
-          <div class="form-group">
-            <label>Repetições</label>
-            <input
-              type="text"
-              id="edit-active-reps"
-              placeholder="Ex: 12"
-              autocomplete="off"
-              required
-            />
-          </div>
-          <div class="form-group">
-            <label>Carga (kg)</label>
-            <input
-              type="text"
-              id="edit-active-weight"
-              placeholder="Ex: 20"
-              autocomplete="off"
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            class="btn-primary btn-full"
-            style="margin-top: 10px;"
-          >
-            Atualizar Exercício
-          </button>
-        </form>
-      </div>
-    </div>
 
-          <!-- NOVO: Display do temporizador alinhado à direita -->
-          <div id="session-timer" style="font-size: 1.4rem; font-weight: 800; color: var(--neon-accent); margin-left: auto; margin-right: 15px;">00:00</div>
-
-          <button class="btn-close close-modal-session">&times;</button>
+        <!-- MODAL EDITAR EXERCÍCIO DA SESSÃO ATIVA -->
+        <div id="modal-edit-active-exercise" class="modal hidden">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Editar Exercício (Sessão Ativa)</h3>
+              <button class="btn-close close-modal-edit-active">&times;</button>
+            </div>
+            <form id="form-edit-active-exercise">
+              <div class="form-group">
+                <label>Séries</label>
+                <input
+                  type="text"
+                  id="edit-active-sets"
+                  placeholder="Ex: 4"
+                  autocomplete="off"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label>Repetições</label>
+                <input
+                  type="text"
+                  id="edit-active-reps"
+                  placeholder="Ex: 12"
+                  autocomplete="off"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label>Carga (kg)</label>
+                <input
+                  type="text"
+                  id="edit-active-weight"
+                  placeholder="Ex: 20"
+                  autocomplete="off"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                class="btn-primary btn-full"
+                style="margin-top: 10px;"
+              >
+                Atualizar Exercício
+              </button>
+            </form>
+          </div>
         </div>
 
         <div
@@ -555,6 +556,7 @@
         </button>
       </div>
     </div>
+
     <!-- Navegação Inferior Premium -->
     <nav class="app-nav">
       <button
@@ -634,6 +636,20 @@
         </svg>
       </button>
     </nav>
+
+    <!-- Barra Flutuante de Treino Minimizado -->
+    <div id="minimized-workout-bar" class="minimized-workout-bar hidden">
+      <div class="minimized-workout-info" onclick="window.restoreActiveSession()">
+        <div class="minimized-pulse-dot"></div>
+        <div>
+          <strong id="minibars-title">Treino em Andamento</strong>
+          <span id="minibars-timer" style="font-size: 0.75rem; color: var(--neon-accent); font-weight: 700;">00:00</span>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" class="btn-primary" style="padding: 6px 12px; font-size: 0.7rem;" onclick="window.restoreActiveSession()">Continuar</button>
+      </div>
+    </div>
 
     <script src="default-exercises.js"></script>
     <script src="db.js"></script>
