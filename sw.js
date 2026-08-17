@@ -1,6 +1,5 @@
-const CACHE_NAME = 'liwft-cache-v1';
+const CACHE_NAME = 'liwft-cache-v2';
 
-// Arquivos locais essenciais do app
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -18,35 +17,45 @@ const ASSETS_TO_CACHE = [
   'https://cdn.jsdelivr.net/npm/chart.js'
 ];
 
-// Instalação do Service Worker e cache dos assets estáticos
+const NETWORK_FIRST_FILES = ['app.js', 'db.js', 'style.css', 'index.html'];
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
   );
   self.skipWaiting();
 });
 
-// Ativação e limpeza de caches antigos
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      );
-    })
+    caches.keys().then((keys) =>
+      Promise.all(keys.map((key) => (key !== CACHE_NAME ? caches.delete(key) : undefined)))
+    )
   );
   self.clients.claim();
 });
 
-// Intercepta as requisições (incluindo GIFs externos e APIs)
 self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
+  const fileName = requestUrl.pathname.split('/').pop() || '';
+  const useNetworkFirst = NETWORK_FIRST_FILES.includes(fileName);
+
+  if (useNetworkFirst) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
@@ -54,22 +63,20 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse;
       }
 
-      return fetch(event.request).then((networkResponse) => {
-        // Se a resposta não for válida, apenas retorna sem quebrar
-        if (!networkResponse || networkResponse.status !== 200) {
+      return fetch(event.request)
+        .then((networkResponse) => {
+          if (!networkResponse || networkResponse.status !== 200) {
+            return networkResponse;
+          }
+
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+
           return networkResponse;
-        }
-
-        // Clona e salva em cache dinamicamente qualquer imagem ou requisição bem-sucedida
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-
-        return networkResponse;
-      }).catch(() => {
-        return caches.match('./index.html');
-      });
+        })
+        .catch(() => caches.match('./index.html'));
     })
   );
 });

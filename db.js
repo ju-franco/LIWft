@@ -174,24 +174,144 @@ const DB = {
     localStorage.setItem('my_user_exercises', JSON.stringify(userExercises));
   },
 
+  getExerciseWeights() {
+    return JSON.parse(localStorage.getItem('my_exercise_weights') || '{}');
+  },
+
+  getExerciseWeight(exerciseId) {
+    if (!exerciseId) return '';
+    const weights = this.getExerciseWeights();
+    return weights[exerciseId] ?? '';
+  },
+
+  _saveExerciseWeightOnly(exerciseId, weight) {
+    const weights = this.getExerciseWeights();
+    weights[exerciseId] = weight ?? '';
+    localStorage.setItem('my_exercise_weights', JSON.stringify(weights));
+  },
+
+  _syncAllWorkoutsToCentralWeights() {
+    const weights = this.getExerciseWeights();
+    const workouts = JSON.parse(localStorage.getItem('my_workouts') || '[]');
+    const synced = workouts.map((workout) => ({
+      ...workout,
+      exercises: (workout.exercises || []).map((ex) => ({
+        ...ex,
+        weight:
+          ex.exerciseId && weights[ex.exerciseId] !== undefined
+            ? weights[ex.exerciseId]
+            : (ex.weight ?? ''),
+      })),
+    }));
+    localStorage.setItem('my_workouts', JSON.stringify(synced));
+    return synced;
+  },
+
+  setExerciseWeight(exerciseId, weight) {
+    if (!exerciseId) return;
+    this._saveExerciseWeightOnly(exerciseId, weight);
+    this._syncAllWorkoutsToCentralWeights();
+  },
+
+  migrateExerciseWeights() {
+    const weights = this.getExerciseWeights();
+    const workouts = JSON.parse(localStorage.getItem('my_workouts') || '[]');
+
+    workouts.forEach((workout) => {
+      (workout.exercises || []).forEach((ex) => {
+        if (!ex.exerciseId) return;
+        const storedWeight =
+          ex.weight !== undefined && ex.weight !== null
+            ? String(ex.weight).trim()
+            : '';
+        if (storedWeight !== '' && weights[ex.exerciseId] === undefined) {
+          weights[ex.exerciseId] = ex.weight;
+        }
+      });
+    });
+
+    localStorage.setItem('my_exercise_weights', JSON.stringify(weights));
+    this._syncAllWorkoutsToCentralWeights();
+  },
+
+  _applyStoredWeightsToExercises(exercises) {
+    const weights = this.getExerciseWeights();
+    return (exercises || []).map((ex) => ({
+      ...ex,
+      weight:
+        ex.exerciseId && weights[ex.exerciseId] !== undefined
+          ? weights[ex.exerciseId]
+          : (ex.weight ?? ''),
+    }));
+  },
+
   getWorkouts() {
-    return JSON.parse(localStorage.getItem('my_workouts') || '[]');
+    const workouts = JSON.parse(localStorage.getItem('my_workouts') || '[]');
+    return workouts.map((workout) => ({
+      ...workout,
+      exercises: this._applyStoredWeightsToExercises(workout.exercises),
+    }));
   },
 
   saveWorkout(workout) {
-    let workouts = this.getWorkouts();
-    if (workout.id) {
-      const index = workouts.findIndex(w => w.id === workout.id);
+    const weights = this.getExerciseWeights();
+
+    (workout.exercises || []).forEach((ex) => {
+      if (ex.exerciseId) {
+        weights[ex.exerciseId] = ex.weight ?? '';
+      }
+    });
+
+    localStorage.setItem('my_exercise_weights', JSON.stringify(weights));
+
+    let workouts = JSON.parse(localStorage.getItem('my_workouts') || '[]');
+    const syncedWorkout = {
+      ...workout,
+      exercises: this._applyStoredWeightsToExercises(workout.exercises),
+    };
+
+    if (syncedWorkout.id) {
+      const index = workouts.findIndex((w) => w.id === syncedWorkout.id);
       if (index !== -1) {
-        workouts[index] = workout;
+        workouts[index] = syncedWorkout;
       } else {
-        workouts.push(workout);
+        workouts.push(syncedWorkout);
       }
     } else {
-      workout.id = Date.now().toString();
-      workouts.push(workout);
+      syncedWorkout.id = Date.now().toString();
+      workouts.push(syncedWorkout);
     }
-    localStorage.setItem('my_workouts', JSON.stringify(workouts));
+
+    localStorage.setItem(
+      'my_workouts',
+      JSON.stringify(
+        workouts.map((w) => ({
+          ...w,
+          exercises: this._applyStoredWeightsToExercises(w.exercises),
+        })),
+      ),
+    );
+  },
+
+  updateWorkoutExercises(workoutId, exercises) {
+    let workouts = JSON.parse(localStorage.getItem('my_workouts') || '[]');
+    const index = workouts.findIndex((w) => w.id === workoutId);
+    if (index === -1) return;
+
+    workouts[index] = {
+      ...workouts[index],
+      exercises: this._applyStoredWeightsToExercises(exercises),
+    };
+
+    localStorage.setItem(
+      'my_workouts',
+      JSON.stringify(
+        workouts.map((w) => ({
+          ...w,
+          exercises: this._applyStoredWeightsToExercises(w.exercises),
+        })),
+      ),
+    );
   },
 
   deleteWorkout(id) {

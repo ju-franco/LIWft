@@ -49,6 +49,7 @@ window.restoreActiveSession = window.restoreSession;
 document.addEventListener("DOMContentLoaded", () => {
   if (typeof DB !== "undefined") {
     if (DB.setupDatalist) DB.setupDatalist();
+    if (DB.migrateExerciseWeights) DB.migrateExerciseWeights();
 
     // Dispara a busca automática dos exercícios padrão em segundo plano
     if (DB.initDefaultExercisesAnatomy) {
@@ -582,7 +583,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             <div class="session-metrics-grid">
               <div class="session-metric-box">
-                <div class="session-metric-value">${exItem.weight || 0} kg</div>
+                <div class="session-metric-value">${DB.getExerciseWeight(exItem.exerciseId) || exItem.weight || 0} kg</div>
                 <div class="session-metric-label">Carga</div>
               </div>
               <div class="session-metric-box">
@@ -685,10 +686,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     currentEditingSessionExerciseIndex = idx;
     const currentEx = activeSessionWorkout.exercises[idx];
+    const sharedWeight = DB.getExerciseWeight(currentEx.exerciseId) || currentEx.weight || '';
 
     document.getElementById('edit-active-sets').value = currentEx.sets || '';
     document.getElementById('edit-active-reps').value = currentEx.reps || '';
-    document.getElementById('edit-active-weight').value = currentEx.weight || '';
+    document.getElementById('edit-active-weight').value = sharedWeight;
 
     if (modalEditActiveEx) {
       modalEditActiveEx.classList.remove('hidden');
@@ -704,11 +706,21 @@ document.addEventListener("DOMContentLoaded", () => {
       const newReps = document.getElementById('edit-active-reps').value;
       const newWeight = document.getElementById('edit-active-weight').value;
 
-      activeSessionWorkout.exercises[currentEditingSessionExerciseIndex].sets = newSets;
-      activeSessionWorkout.exercises[currentEditingSessionExerciseIndex].reps = newReps;
-      activeSessionWorkout.exercises[currentEditingSessionExerciseIndex].weight = newWeight;
-
       const editedIdx = currentEditingSessionExerciseIndex;
+      const editedExercise = activeSessionWorkout.exercises[editedIdx];
+      editedExercise.sets = newSets;
+      editedExercise.reps = newReps;
+      editedExercise.weight = newWeight;
+
+      if (editedExercise.exerciseId) {
+        DB.setExerciseWeight(editedExercise.exerciseId, newWeight);
+        activeSessionWorkout.exercises.forEach((ex) => {
+          if (ex.exerciseId === editedExercise.exerciseId) {
+            ex.weight = newWeight;
+          }
+        });
+      }
+
       const parsedSets = parseInt(newSets, 10) || 0;
       if (sessionExerciseProgress[editedIdx]) {
         sessionExerciseProgress[editedIdx].completedSets = Math.min(
@@ -720,11 +732,16 @@ document.addEventListener("DOMContentLoaded", () => {
           sessionExerciseProgress[editedIdx].completedSets >= parsedSets;
       }
 
-      let workouts = DB.getWorkouts();
-      const workoutIndex = workouts.findIndex((w) => w.id === activeSessionWorkout.id);
-      if (workoutIndex !== -1) {
-        workouts[workoutIndex] = activeSessionWorkout;
-        localStorage.setItem("my_workouts", JSON.stringify(workouts));
+      DB.updateWorkoutExercises(
+        activeSessionWorkout.id,
+        activeSessionWorkout.exercises,
+      );
+
+      const refreshedWorkout = DB.getWorkouts().find(
+        (w) => w.id === activeSessionWorkout.id,
+      );
+      if (refreshedWorkout) {
+        activeSessionWorkout = refreshedWorkout;
       }
 
       if (modalEditActiveEx) {
@@ -1197,6 +1214,13 @@ document.addEventListener("DOMContentLoaded", () => {
       a.name.localeCompare(b.name, "pt-BR"),
     );
 
+    const initialExerciseId = exData ? exData.exerciseId : sortedLibrary[0]?.id;
+    const initialWeight = initialExerciseId
+      ? DB.getExerciseWeight(initialExerciseId) || (exData ? exData.weight : "")
+      : exData
+        ? exData.weight
+        : "";
+
     const row = document.createElement("div");
     row.className = "exercise-row-form";
     row.innerHTML = `
@@ -1210,9 +1234,28 @@ document.addEventListener("DOMContentLoaded", () => {
       <div style="display:flex; gap:8px">
         <input type="text" placeholder="Séries (ex: 4)" class="workout-sets" value="${exData ? exData.sets : ""}" style="width:33%; padding:8px; background:var(--card-bg); border:1px solid var(--card-border); color:white; border-radius:6px;">
         <input type="text" placeholder="Reps (ex: 12)" class="workout-reps" value="${exData ? exData.reps : ""}" style="width:33%; padding:8px; background:var(--card-bg); border:1px solid var(--card-border); color:white; border-radius:6px;">
-        <input type="text" placeholder="Carga (kg)" class="workout-weight" value="${exData ? exData.weight : ""}" style="width:33%; padding:8px; background:var(--card-bg); border:1px solid var(--card-border); color:white; border-radius:6px;">
+        <input type="text" placeholder="Carga (kg)" class="workout-weight" value="${initialWeight}" style="width:33%; padding:8px; background:var(--card-bg); border:1px solid var(--card-border); color:white; border-radius:6px;">
       </div>
     `;
+
+    const selectExercise = row.querySelector(".select-exercise");
+    const weightInput = row.querySelector(".workout-weight");
+
+    const syncWeightFieldFromStore = () => {
+      const storedWeight = DB.getExerciseWeight(selectExercise.value);
+      if (storedWeight !== "") {
+        weightInput.value = storedWeight;
+      }
+    };
+
+    selectExercise.addEventListener("change", syncWeightFieldFromStore);
+
+    weightInput.addEventListener("change", () => {
+      const exerciseId = selectExercise.value;
+      if (exerciseId) {
+        DB.setExerciseWeight(exerciseId, weightInput.value);
+      }
+    });
 
     row
       .querySelector(".btn-remove-ex")
@@ -1254,6 +1297,14 @@ document.addEventListener("DOMContentLoaded", () => {
       ).map((cb) => cb.value);
 
       const rows = document.querySelectorAll(".exercise-row-form");
+      rows.forEach((r) => {
+        const exerciseId = r.querySelector(".select-exercise").value;
+        const weight = r.querySelector(".workout-weight").value;
+        if (exerciseId) {
+          DB.setExerciseWeight(exerciseId, weight);
+        }
+      });
+
       const exercises = Array.from(rows).map((r) => ({
         exerciseId: r.querySelector(".select-exercise").value,
         sets: r.querySelector(".workout-sets").value,
