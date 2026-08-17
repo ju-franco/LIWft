@@ -8,6 +8,7 @@ const SVG_CHECK = `<svg class="status-icon-svg completed" viewBox="0 0 24 24" fi
 const SVG_CIRCLE = `<svg class="status-icon-svg pending" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>`;
 const SVG_TRASH = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
 const SVG_PENCIL = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
+const SVG_DOT_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 
 // Registra o Service Worker para habilitar o cache offline e PWA
 if ("serviceWorker" in navigator) {
@@ -202,6 +203,62 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let activeSessionTimer = null;
   let sessionStartTime = null;
+  let sessionExerciseProgress = {};
+
+  function syncExerciseProgressFromCard(card) {
+    const idx = parseInt(card.id.replace("session-card-", ""), 10);
+    if (Number.isNaN(idx)) return;
+
+    const dots = card.querySelectorAll(".series-dot");
+    const switchInput = card.querySelector(".exercise-global-switch");
+    const completedSets = Array.from(dots).filter((d) =>
+      d.classList.contains("completed"),
+    ).length;
+
+    sessionExerciseProgress[idx] = {
+      completedSets,
+      fullyDone: switchInput ? switchInput.checked : false,
+    };
+  }
+
+  function captureAllSessionProgress() {
+    document.querySelectorAll(".session-exercise-card").forEach((card) => {
+      syncExerciseProgressFromCard(card);
+    });
+  }
+
+  function applySessionProgress() {
+    Object.entries(sessionExerciseProgress).forEach(([idxStr, progress]) => {
+      const idx = parseInt(idxStr, 10);
+      const card = document.getElementById(`session-card-${idx}`);
+      if (!card) return;
+
+      const dots = card.querySelectorAll(".series-dot");
+      const switchInput = card.querySelector(".exercise-global-switch");
+      const totalSets = dots.length;
+      let completedSets = Math.min(progress.completedSets || 0, totalSets);
+
+      if (progress.fullyDone) {
+        completedSets = totalSets;
+      }
+
+      dots.forEach((dot, dotIdx) => {
+        dot.classList.remove("active", "completed");
+        dot.textContent = dotIdx + 1;
+
+        if (dotIdx < completedSets) {
+          dot.classList.add("completed");
+          dot.innerHTML = SVG_DOT_CHECK;
+        } else if (dotIdx === completedSets && completedSets < totalSets) {
+          dot.classList.add("active");
+        }
+      });
+
+      if (switchInput) {
+        switchInput.checked = totalSets > 0 && completedSets >= totalSets;
+      }
+    });
+  }
 
   // Evento para o botão de minimizar no cabeçalho do modal ativo
   const btnMinimizeSession = document.getElementById("btn-minimize-session");
@@ -373,10 +430,24 @@ document.addEventListener("DOMContentLoaded", () => {
         activeSessionTimer = null;
       }
       sessionStartTime = null;
+      sessionExerciseProgress = {};
     });
   }
 
   function openActiveSessionModal(workout) {
+    const isNewSession = !sessionStartTime;
+    let expandedExerciseIndices = [];
+
+    if (!isNewSession) {
+      captureAllSessionProgress();
+      document.querySelectorAll(".session-exercise-card.active-expanded").forEach((card) => {
+        const idx = parseInt(card.id.replace("session-card-", ""), 10);
+        if (!Number.isNaN(idx)) expandedExerciseIndices.push(idx);
+      });
+    } else {
+      sessionExerciseProgress = {};
+    }
+
     activeSessionWorkout = workout;
     const library = DB.getExerciseLibrary();
 
@@ -385,11 +456,11 @@ document.addEventListener("DOMContentLoaded", () => {
       `${workout.exercises ? workout.exercises.length : 0} EXERCÍCIOS`;
 
     const timerEl = document.getElementById("session-timer");
-    if (timerEl && !sessionStartTime) {
+    if (timerEl && isNewSession) {
       timerEl.textContent = "00:00";
     }
 
-    if (!sessionStartTime) {
+    if (isNewSession) {
       sessionStartTime = Date.now();
     }
 
@@ -466,8 +537,12 @@ document.addEventListener("DOMContentLoaded", () => {
           dotsHtml += `<div class="series-dot ${dotClass}" data-step="${s}" onclick="window.toggleSeriesDot(event, this)">${s}</div>`;
         }
 
+        const isExpanded =
+          (isNewSession && idx === 0) ||
+          (!isNewSession && expandedExerciseIndices.includes(idx));
+
         return `
-        <div class="session-exercise-card ${idx === 0 ? "active-expanded" : ""}" id="${cardId}">
+        <div class="session-exercise-card ${isExpanded ? "active-expanded" : ""}" id="${cardId}">
           <div class="session-card-compact" onclick="window.toggleSessionCard('${cardId}')">
             <div class="session-compact-left">
               <img src="${thumbUrl}" alt="Thumb" class="session-thumb-mini">
@@ -525,6 +600,8 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .join("");
 
+    applySessionProgress();
+
     const modalSession = document.getElementById("modal-active-session");
     const minibar = document.getElementById("minimized-workout-bar");
     
@@ -557,7 +634,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (dotElement.classList.contains("active")) {
       dotElement.classList.remove("active");
       dotElement.classList.add("completed");
-      dotElement.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      dotElement.innerHTML = SVG_DOT_CHECK;
 
       if (currentIndex + 1 < dots.length) {
         dots[currentIndex + 1].classList.add("active");
@@ -565,6 +642,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (switchInput) switchInput.checked = true;
       }
     }
+
+    if (card) syncExerciseProgressFromCard(card);
   };
 
   window.toggleSessionDoneGlobal = function (checkbox, cardId) {
@@ -572,10 +651,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (card) {
       const dots = card.querySelectorAll(".series-dot");
       if (checkbox.checked) {
-        dots.forEach((d, idx) => {
+        dots.forEach((d) => {
           d.classList.remove("active");
           d.classList.add("completed");
-          d.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+          d.innerHTML = SVG_DOT_CHECK;
         });
       } else {
         dots.forEach((d, idx) => {
@@ -585,6 +664,8 @@ document.addEventListener("DOMContentLoaded", () => {
           else d.classList.remove("active");
         });
       }
+
+      syncExerciseProgressFromCard(card);
     }
   };
 
@@ -626,6 +707,18 @@ document.addEventListener("DOMContentLoaded", () => {
       activeSessionWorkout.exercises[currentEditingSessionExerciseIndex].sets = newSets;
       activeSessionWorkout.exercises[currentEditingSessionExerciseIndex].reps = newReps;
       activeSessionWorkout.exercises[currentEditingSessionExerciseIndex].weight = newWeight;
+
+      const editedIdx = currentEditingSessionExerciseIndex;
+      const parsedSets = parseInt(newSets, 10) || 0;
+      if (sessionExerciseProgress[editedIdx]) {
+        sessionExerciseProgress[editedIdx].completedSets = Math.min(
+          sessionExerciseProgress[editedIdx].completedSets,
+          parsedSets,
+        );
+        sessionExerciseProgress[editedIdx].fullyDone =
+          parsedSets > 0 &&
+          sessionExerciseProgress[editedIdx].completedSets >= parsedSets;
+      }
 
       let workouts = DB.getWorkouts();
       const workoutIndex = workouts.findIndex((w) => w.id === activeSessionWorkout.id);
@@ -672,6 +765,8 @@ document.addEventListener("DOMContentLoaded", () => {
           clearInterval(activeSessionTimer);
           activeSessionTimer = null;
         }
+        sessionStartTime = null;
+        sessionExerciseProgress = {};
 
         const now = new Date();
         const dateStr = now.toISOString().split("T")[0];
