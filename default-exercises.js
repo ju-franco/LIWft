@@ -167,7 +167,7 @@ const DEFAULT_EXERCISES = [
   {
     name: "Tríceps Francês com Halter",
     en: "Decline Dumbbell Triceps Extension",
-    executionVideo: "https://cdn.fisiculturismo.com.br/monthly_2017_03/triceps-frances-com-halter-bilateral-animacao.gif.ea6e5e979e74e57605440cf1f1bcabd0.gifgit",
+    executionVideo: "https://cdn.fisiculturismo.com.br/monthly_2017_03/triceps-frances-com-halter-bilateral-animacao.gif.ea6e5e979e74e57605440cf1f1bcabd0.gif",
     muscleImg: "https://api.anatome.dev/generateImage?gender=male&view=dual&layers=DC2626%3Atriceps&width=768&height=1024&output=raw&contour=on&contour_color=%23e5e7eb&contour_stroke=%23dadada&contour_width=2",
     tags: ["Tríceps"]
   },
@@ -183,7 +183,7 @@ const DEFAULT_EXERCISES = [
   {
     name: "Cadeira Extensora",
     en: "Leg Extension",
-    executionVideo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRI_FAAPrBJFUVO0Pc3R1QuoPmoRog5b30eg3uigXJm0g&s=10",
+    executionVideo: "https://www.ferrosports.com.br/img_external/pernas/image29.gif",
     muscleImg: "https://api.anatome.dev/generateImage?gender=male&view=dual&layers=DC2626%3Aquadriceps&width=768&height=1024&output=raw&contour=on&contour_color=%23e5e7eb&contour_stroke=%23dadada&contour_width=2",
     tags: []
   },
@@ -219,7 +219,7 @@ const DEFAULT_EXERCISES = [
   {
     name: "Cadeira Adutora",
     en: "Thigh Adductor",
-    executionVideo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-70lfqWkVRqWHTVhWsz1E0aVIsmQhYTmcGifXRuuNLw&s=10",
+    executionVideo: "https://cdn.fisiculturismo.com.br/monthly_2017_03/cadeira-adutora-animacao.gif.563f462fcc55af95be418e63bf3298e5.gif",
     muscleImg: "https://api.anatome.dev/generateImage?gender=male&view=dual&layers=DC2626%3Aadductors%7CF59E0B%3Agluteal%2Chamstring&width=768&height=1024&output=raw&contour=on&contour_color=%23e5e7eb&contour_stroke=%23dadada&contour_width=2",
     tags: ["Glúteo", "Adutores", "Posterior de Coxa"]
   },
