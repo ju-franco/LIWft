@@ -2,6 +2,8 @@
 let currentSearchQuery = "";
 let selectedTagsSet = new Set(["todos"]);
 let weightChartInstance;
+let weightProgressChartInstance;
+let historyExpanded = false;
 
 // Ícones SVG globais para acesso em qualquer função
 const SVG_CHECK = `<svg class="status-icon-svg completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -16,10 +18,7 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker
       .register("./sw.js")
       .then((registration) => {
-        console.log(
-          "Service Worker registrado com sucesso! Escopo:",
-          registration.scope,
-        );
+        console.log("Service Worker registrado com sucesso! Escopo:", registration.scope);
       })
       .catch((error) => {
         console.log("Falha ao registrar o Service Worker:", error);
@@ -31,7 +30,6 @@ if ("serviceWorker" in navigator) {
 window.minimizeSession = function() {
   const modal = document.getElementById("modal-active-session");
   const minibar = document.getElementById("minimized-workout-bar");
-  
   if (modal) modal.classList.add("hidden");
   if (minibar) minibar.classList.remove("hidden");
 };
@@ -40,23 +38,457 @@ window.minimizeSession = function() {
 window.restoreSession = function() {
   const modal = document.getElementById("modal-active-session");
   const minibar = document.getElementById("minimized-workout-bar");
-  
   if (modal) modal.classList.remove("hidden");
   if (minibar) minibar.classList.add("hidden");
 };
 window.restoreActiveSession = window.restoreSession;
 
+// ============================================================
+// TIMER DE DESCANSO FLUTUANTE (arrastável, não-bloqueante)
+// ============================================================
+const RestTimer = {
+  totalSeconds: 90,
+  remainingSeconds: 90,
+  isRunning: false,
+  intervalId: null,
+  finished: false,
+  bubbleEl: null,
+  displayEl: null,
+  progressEl: null,
+  playPauseBtnEl: null,
+
+  // Drag state
+  isDragging: false,
+  dragOffsetX: 0,
+  dragOffsetY: 0,
+  hasMoved: false,
+
+  init() {
+    this.bubbleEl = document.getElementById("rest-timer-bubble");
+    this.displayEl = document.getElementById("rest-timer-display");
+    this.progressEl = document.getElementById("rest-timer-progress-bar");
+    this.playPauseBtnEl = document.getElementById("btn-rest-timer-playpause");
+
+    if (!this.bubbleEl) return;
+
+    document
+      .getElementById("btn-close-rest-timer")
+      ?.addEventListener("click", () => this.close());
+
+    this.playPauseBtnEl?.addEventListener("click", () => {
+      if (this.finished) {
+        this.reset(this.totalSeconds);
+      } else {
+        this.togglePlayPause();
+      }
+    });
+
+    this.bubbleEl.querySelectorAll(".rest-timer-btn[data-add]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const add = parseInt(btn.getAttribute("data-add"), 10) || 0;
+        this.addSeconds(add);
+      });
+    });
+
+    this.bubbleEl.querySelectorAll(".rest-timer-preset").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const preset = parseInt(btn.getAttribute("data-preset"), 10) || 90;
+        this.start(preset);
+      });
+    });
+
+    this.restorePosition();
+    this.setupDrag();
+    this.updateUI();
+
+    // Reposiciona se a janela mudar de tamanho (rotação, teclado, etc)
+    window.addEventListener("resize", () => {
+      if (!this.bubbleEl.classList.contains("hidden")) {
+        this.clampToViewport();
+      }
+    });
+  },
+
+  // ---------- POSIÇÃO ----------
+  restorePosition() {
+    try {
+      const saved = JSON.parse(localStorage.getItem("my_rest_timer_pos") || "null");
+      if (saved && typeof saved.x === "number" && typeof saved.y === "number") {
+        this.bubbleEl.style.left = `${saved.x}px`;
+        this.bubbleEl.style.top = `${saved.y}px`;
+        this.bubbleEl.style.right = "auto";
+        this.bubbleEl.style.bottom = "auto";
+      }
+    } catch (e) {
+      // ignora
+    }
+  },
+
+  savePosition() {
+    const rect = this.bubbleEl.getBoundingClientRect();
+    localStorage.setItem("my_rest_timer_pos", JSON.stringify({
+      x: Math.round(rect.left),
+      y: Math.round(rect.top),
+    }));
+  },
+
+  clampToViewport() {
+    const rect = this.bubbleEl.getBoundingClientRect();
+    const margin = 8;
+    const maxX = window.innerWidth - rect.width - margin;
+    const maxY = window.innerHeight - rect.height - margin;
+
+    let newLeft = Math.min(Math.max(rect.left, margin), maxX);
+    let newTop = Math.min(Math.max(rect.top, margin), maxY);
+
+    this.bubbleEl.style.left = `${newLeft}px`;
+    this.bubbleEl.style.top = `${newTop}px`;
+    this.bubbleEl.style.right = "auto";
+    this.bubbleEl.style.bottom = "auto";
+  },
+
+  // ---------- DRAG ----------
+  setupDrag() {
+    const header = this.bubbleEl.querySelector(".rest-timer-header");
+    if (!header) return;
+
+    const onPointerDown = (e) => {
+      // Ignora cliques em botões (fechar)
+      if (e.target.closest("button")) return;
+
+      e.preventDefault();
+
+      const rect = this.bubbleEl.getBoundingClientRect();
+      const point = e.touches ? e.touches[0] : e;
+
+      this.isDragging = true;
+      this.hasMoved = false;
+      this.dragOffsetX = point.clientX - rect.left;
+      this.dragOffsetY = point.clientY - rect.top;
+
+      this.bubbleEl.classList.add("dragging");
+
+      // Fixa right/bottom para evitar "pulo"
+      this.bubbleEl.style.right = "auto";
+      this.bubbleEl.style.bottom = "auto";
+      this.bubbleEl.style.left = `${rect.left}px`;
+      this.bubbleEl.style.top = `${rect.top}px`;
+
+      document.addEventListener("mousemove", onPointerMove);
+      document.addEventListener("mouseup", onPointerUp);
+      document.addEventListener("touchmove", onPointerMove, { passive: false });
+      document.addEventListener("touchend", onPointerUp);
+      document.addEventListener("touchcancel", onPointerUp);
+    };
+
+    const onPointerMove = (e) => {
+      if (!this.isDragging) return;
+      e.preventDefault();
+
+      const point = e.touches ? e.touches[0] : e;
+      const rect = this.bubbleEl.getBoundingClientRect();
+      const margin = 8;
+
+      let newLeft = point.clientX - this.dragOffsetX;
+      let newTop = point.clientY - this.dragOffsetY;
+
+      newLeft = Math.min(Math.max(newLeft, margin), window.innerWidth - rect.width - margin);
+      newTop = Math.min(Math.max(newTop, margin), window.innerHeight - rect.height - margin);
+
+      this.bubbleEl.style.left = `${newLeft}px`;
+      this.bubbleEl.style.top = `${newTop}px`;
+
+      if (Math.abs(newLeft - rect.left) > 3 || Math.abs(newTop - rect.top) > 3) {
+        this.hasMoved = true;
+      }
+    };
+
+    const onPointerUp = () => {
+      if (!this.isDragging) return;
+
+      this.isDragging = false;
+      this.bubbleEl.classList.remove("dragging");
+
+      if (this.hasMoved) this.savePosition();
+
+      document.removeEventListener("mousemove", onPointerMove);
+      document.removeEventListener("mouseup", onPointerUp);
+      document.removeEventListener("touchmove", onPointerMove);
+      document.removeEventListener("touchend", onPointerUp);
+      document.removeEventListener("touchcancel", onPointerUp);
+    };
+
+    header.addEventListener("mousedown", onPointerDown);
+    header.addEventListener("touchstart", onPointerDown, { passive: false });
+  },
+
+  // ---------- LÓGICA DO TIMER ----------
+  start(seconds) {
+    this.totalSeconds = seconds;
+    this.remainingSeconds = seconds;
+    this.finished = false;
+    this.isRunning = true;
+
+    this.bubbleEl.querySelectorAll(".rest-timer-preset").forEach((b) => {
+      b.classList.toggle("active", parseInt(b.getAttribute("data-preset"), 10) === seconds);
+    });
+
+    this.bubbleEl.classList.remove("hidden", "finished");
+
+    // Ao abrir, se ainda não tiver posição salva, define uma posição padrão confortável
+    if (!localStorage.getItem("my_rest_timer_pos")) {
+      const rect = this.bubbleEl.getBoundingClientRect();
+      const defaultX = window.innerWidth - rect.width - 16;
+      const defaultY = window.innerHeight - rect.height - 100;
+      this.bubbleEl.style.left = `${defaultX}px`;
+      this.bubbleEl.style.top = `${defaultY}px`;
+      this.bubbleEl.style.right = "auto";
+      this.bubbleEl.style.bottom = "auto";
+    } else {
+      this.clampToViewport();
+    }
+
+    this.updateUI();
+    this.startInterval();
+  },
+
+  startInterval() {
+    if (this.intervalId) clearInterval(this.intervalId);
+    this.intervalId = setInterval(() => {
+      if (!this.isRunning) return;
+      this.remainingSeconds -= 1;
+
+      if (this.remainingSeconds <= 0) {
+        this.remainingSeconds = 0;
+        this.finish();
+      }
+      this.updateUI();
+    }, 1000);
+  },
+
+  finish() {
+    this.isRunning = false;
+    this.finished = true;
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    this.bubbleEl.classList.add("finished");
+
+    if (navigator.vibrate) {
+      try { navigator.vibrate([200, 100, 200, 100, 400]); } catch (e) {}
+    }
+
+    this.updateUI();
+  },
+
+  togglePlayPause() {
+    if (this.finished) return;
+    this.isRunning = !this.isRunning;
+    this.updateUI();
+  },
+
+  addSeconds(sec) {
+    this.remainingSeconds = Math.max(0, this.remainingSeconds + sec);
+    this.totalSeconds = Math.max(this.totalSeconds, this.remainingSeconds);
+    this.finished = false;
+    this.bubbleEl.classList.remove("finished");
+    if (this.remainingSeconds > 0 && !this.intervalId) {
+      this.isRunning = true;
+      this.startInterval();
+    }
+    this.updateUI();
+  },
+
+  reset(seconds) {
+    this.start(seconds || this.totalSeconds);
+  },
+
+  close() {
+    this.isRunning = false;
+    this.finished = false;
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    this.bubbleEl.classList.add("hidden");
+    this.bubbleEl.classList.remove("finished");
+  },
+
+  updateUI() {
+    if (!this.displayEl) return;
+
+    const mins = String(Math.floor(this.remainingSeconds / 60)).padStart(2, "0");
+    const secs = String(this.remainingSeconds % 60).padStart(2, "0");
+    this.displayEl.textContent = `${mins}:${secs}`;
+
+    if (this.progressEl) {
+      const pct = this.totalSeconds > 0
+        ? (this.remainingSeconds / this.totalSeconds) * 100
+        : 0;
+      this.progressEl.style.width = `${pct}%`;
+    }
+
+    if (this.playPauseBtnEl) {
+      this.playPauseBtnEl.textContent = this.finished ? "↻" : (this.isRunning ? "⏸" : "▶");
+    }
+  },
+
+  triggerDefault() {
+    if (!this.bubbleEl) return;
+    this.start(this.totalSeconds || 90);
+  },
+};
+
+window.RestTimer = RestTimer;
+
 document.addEventListener("DOMContentLoaded", () => {
+  RestTimer.init();
+
   if (typeof DB !== "undefined") {
     if (DB.setupDatalist) DB.setupDatalist();
     if (DB.migrateExerciseWeights) DB.migrateExerciseWeights();
 
-    // Dispara a busca automática dos exercícios padrão em segundo plano
     if (DB.initDefaultExercisesAnatomy) {
       DB.initDefaultExercisesAnatomy().then(() => {
         renderExerciseLibrary();
       });
     }
+  }
+
+  // ============================================================
+  // NOVO: EXPORT / IMPORT / WIPE DE DADOS
+  // ============================================================
+  const btnExportData = document.getElementById("btn-export-data");
+  const btnImportData = document.getElementById("btn-import-data");
+  const inputImportFile = document.getElementById("input-import-file");
+  const btnWipeData = document.getElementById("btn-wipe-data");
+
+  if (btnExportData) {
+    btnExportData.addEventListener("click", () => {
+      try {
+        const data = {};
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith("my_")) {
+            data[key] = localStorage.getItem(key);
+          }
+        }
+
+        const payload = {
+          app: "LIWft",
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          data,
+        };
+
+        const json = JSON.stringify(payload, null, 2);
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+
+        const now = new Date();
+        const filename = `liwft-backup-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}.json`;
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        alert(`Backup exportado com sucesso!\n\nArquivo: ${filename}`);
+      } catch (err) {
+        console.error("Erro ao exportar:", err);
+        alert("Erro ao exportar os dados. Veja o console.");
+      }
+    });
+  }
+
+  if (btnImportData && inputImportFile) {
+    btnImportData.addEventListener("click", () => {
+      inputImportFile.click();
+    });
+
+    inputImportFile.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const parsed = JSON.parse(ev.target.result);
+
+          if (!parsed || !parsed.data || typeof parsed.data !== "object") {
+            alert("Arquivo inválido. Esperado um backup do LIWft.");
+            inputImportFile.value = "";
+            return;
+          }
+
+          const keys = Object.keys(parsed.data);
+          if (keys.length === 0) {
+            alert("O arquivo de backup está vazio.");
+            inputImportFile.value = "";
+            return;
+          }
+
+          const confirmed = confirm(
+            `Isso vai SUBSTITUIR todos os seus dados atuais pelos dados do backup.\n\n` +
+            `Exportado em: ${parsed.exportedAt || "data desconhecida"}\n` +
+            `Chaves encontradas: ${keys.length}\n\n` +
+            `Deseja continuar?`
+          );
+
+          if (!confirmed) {
+            inputImportFile.value = "";
+            return;
+          }
+
+          keys.forEach((key) => {
+            if (key.startsWith("my_")) {
+              localStorage.setItem(key, parsed.data[key]);
+            }
+          });
+
+          alert("Backup restaurado com sucesso! O app será recarregado.");
+          window.location.reload();
+        } catch (err) {
+          console.error("Erro ao importar:", err);
+          alert("Erro ao ler o arquivo. Verifique se é um JSON válido do LIWft.");
+          inputImportFile.value = "";
+        }
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  if (btnWipeData) {
+    btnWipeData.addEventListener("click", () => {
+      const first = confirm(
+        "⚠ ATENÇÃO: isso vai APAGAR TODOS os seus dados (treinos, histórico, perfil, biblioteca personalizada).\n\nDeseja continuar?"
+      );
+      if (!first) return;
+
+      const second = confirm(
+        "TEM CERTEZA? Essa ação não pode ser desfeita.\n\nRecomendamos exportar um backup antes."
+      );
+      if (!second) return;
+
+      try {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith("my_")) keysToRemove.push(key);
+        }
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+        alert("Todos os dados foram apagados. O app será recarregado.");
+        window.location.reload();
+      } catch (err) {
+        console.error("Erro ao apagar:", err);
+        alert("Erro ao apagar os dados.");
+      }
+    });
   }
 
   // GERENCIAMENTO DO MODAL DE PERFIL E GRÁFICO DE PESO
@@ -69,8 +501,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnOpenProfile.addEventListener("click", () => {
       const profile = DB.getProfile();
       document.getElementById("profile-name").value = profile.name || "";
-      document.getElementById("profile-gender").value =
-        profile.gender || "Masculino";
+      document.getElementById("profile-gender").value = profile.gender || "Masculino";
       document.getElementById("profile-age").value = profile.age || "";
       document.getElementById("profile-goal").value = profile.goal || "";
       document.getElementById("profile-height").value = profile.height || "";
@@ -82,9 +513,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (closeBtnProfile && modalProfile) {
-    closeBtnProfile.addEventListener("click", () =>
-      modalProfile.classList.add("hidden"),
-    );
+    closeBtnProfile.addEventListener("click", () => modalProfile.classList.add("hidden"));
   }
 
   if (formProfile) {
@@ -109,9 +538,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const historyData = DB.getWeightHistory();
 
-    if (weightChartInstance) {
-      weightChartInstance.destroy();
-    }
+    if (weightChartInstance) weightChartInstance.destroy();
 
     const ctx = canvas.getContext("2d");
     weightChartInstance = new Chart(ctx, {
@@ -134,24 +561,114 @@ document.addEventListener("DOMContentLoaded", () => {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-        },
+        plugins: { legend: { display: false } },
         scales: {
-          x: {
-            grid: { color: "rgba(255, 255, 255, 0.05)" },
-            ticks: { color: "#8e8f96", font: { size: 10 } },
-          },
-          y: {
-            grid: { color: "rgba(255, 255, 255, 0.05)" },
-            ticks: { color: "#8e8f96", font: { size: 10 } },
-          },
+          x: { grid: { color: "rgba(255, 255, 255, 0.05)" }, ticks: { color: "#8e8f96", font: { size: 10 } } },
+          y: { grid: { color: "rgba(255, 255, 255, 0.05)" }, ticks: { color: "#8e8f96", font: { size: 10 } } },
         },
       },
     });
   }
 
-  // Ouvinte da barra de pesquisa em tempo real
+  // MODAL DE HISTÓRICO DE CARGA
+  const modalWeightProgress = document.getElementById("modal-weight-progress");
+  const closeBtnWeightProgress = document.querySelector(".close-modal-weight-progress");
+
+  if (closeBtnWeightProgress && modalWeightProgress) {
+    closeBtnWeightProgress.addEventListener("click", () => {
+      modalWeightProgress.classList.add("hidden");
+    });
+  }
+
+  window.openWeightProgressModal = function (exerciseId, exerciseName) {
+    if (!modalWeightProgress) return;
+
+    const titleEl = document.getElementById("weight-progress-title");
+    if (titleEl) titleEl.textContent = exerciseName || "Histórico de Carga";
+
+    const entries = DB.getWeightProgress(exerciseId);
+
+    const canvas = document.getElementById("weightProgressChart");
+    if (canvas) {
+      if (weightProgressChartInstance) weightProgressChartInstance.destroy();
+
+      const labels = entries.map((e) => `${e.date}`);
+      const data = entries.map((e) => e.weight);
+
+      const ctx = canvas.getContext("2d");
+      weightProgressChartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels.length > 0 ? labels : ["Sem registros"],
+          datasets: [
+            {
+              label: "Carga (kg)",
+              data: data.length > 0 ? data : [0],
+              borderColor: "#cc00ff",
+              backgroundColor: "rgba(204, 0, 255, 0.1)",
+              borderWidth: 2,
+              pointBackgroundColor: "#cc00ff",
+              fill: true,
+              tension: 0.3,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: "rgba(255, 255, 255, 0.05)" }, ticks: { color: "#8e8f96", font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 5 } },
+            y: { grid: { color: "rgba(255, 255, 255, 0.05)" }, ticks: { color: "#8e8f96", font: { size: 10 } } },
+          },
+        },
+      });
+    }
+
+    const listEl = document.getElementById("weight-progress-list");
+    if (listEl) {
+      if (entries.length === 0) {
+        listEl.innerHTML = `
+          <p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 10px;">
+            Nenhum registro de carga ainda para este exercício.
+          </p>
+        `;
+      } else {
+        const reversed = [...entries].reverse();
+        listEl.innerHTML = reversed
+          .map((entry, idx) => {
+            const previousEntry = reversed[idx + 1];
+            let deltaHtml = "";
+
+            if (previousEntry) {
+              const delta = entry.weight - previousEntry.weight;
+              if (delta > 0) {
+                deltaHtml = `<span style="color: #22c55e; font-size: 0.75rem; font-weight: 700;">▲ +${delta.toFixed(1)} kg</span>`;
+              } else if (delta < 0) {
+                deltaHtml = `<span style="color: #ef4444; font-size: 0.75rem; font-weight: 700;">▼ ${delta.toFixed(1)} kg</span>`;
+              } else {
+                deltaHtml = `<span style="color: var(--text-muted); font-size: 0.75rem;">—</span>`;
+              }
+            }
+
+            return `
+              <div style="display: flex; justify-content: space-between; align-items: center; background: var(--card-bg, #1e293b); border: 1px solid var(--card-border, #334155); border-radius: 8px; padding: 10px 12px;">
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                  <span style="font-size: 0.85rem; font-weight: 700; color: #fff;">${entry.weight} kg</span>
+                  <span style="font-size: 0.7rem; color: var(--text-muted);">${entry.date} • ${entry.time || ''}</span>
+                </div>
+                ${deltaHtml}
+              </div>
+            `;
+          })
+          .join("");
+      }
+    }
+
+    modalWeightProgress.classList.remove("hidden");
+  };
+
+  // Pesquisa e filtros
   const searchInput = document.getElementById("input-search-exercise");
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
@@ -160,7 +677,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Ouvintes dos botões de filtro de tags com suporte a múltipla seleção
   document.querySelectorAll(".tag-filter-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const tag = e.target.getAttribute("data-tag");
@@ -168,25 +684,18 @@ document.addEventListener("DOMContentLoaded", () => {
       if (tag === "todos") {
         selectedTagsSet.clear();
         selectedTagsSet.add("todos");
-        document
-          .querySelectorAll(".tag-filter-btn")
-          .forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll(".tag-filter-btn").forEach((b) => b.classList.remove("active"));
         e.target.classList.add("active");
       } else {
         selectedTagsSet.delete("todos");
-        document
-          .querySelector('.tag-filter-btn[data-tag="todos"]')
-          ?.classList.remove("active");
+        document.querySelector('.tag-filter-btn[data-tag="todos"]')?.classList.remove("active");
 
         if (selectedTagsSet.has(tag)) {
           selectedTagsSet.delete(tag);
           e.target.classList.remove("active");
-
           if (selectedTagsSet.size === 0) {
             selectedTagsSet.add("todos");
-            document
-              .querySelector('.tag-filter-btn[data-tag="todos"]')
-              ?.classList.add("active");
+            document.querySelector('.tag-filter-btn[data-tag="todos"]')?.classList.add("active");
           }
         } else {
           selectedTagsSet.add(tag);
@@ -212,9 +721,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const dots = card.querySelectorAll(".series-dot");
     const switchInput = card.querySelector(".exercise-global-switch");
-    const completedSets = Array.from(dots).filter((d) =>
-      d.classList.contains("completed"),
-    ).length;
+    const completedSets = Array.from(dots).filter((d) => d.classList.contains("completed")).length;
 
     sessionExerciseProgress[idx] = {
       completedSets,
@@ -239,9 +746,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const totalSets = dots.length;
       let completedSets = Math.min(progress.completedSets || 0, totalSets);
 
-      if (progress.fullyDone) {
-        completedSets = totalSets;
-      }
+      if (progress.fullyDone) completedSets = totalSets;
 
       dots.forEach((dot, dotIdx) => {
         dot.classList.remove("active", "completed");
@@ -261,7 +766,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Evento para o botão de minimizar no cabeçalho do modal ativo
   const btnMinimizeSession = document.getElementById("btn-minimize-session");
   if (btnMinimizeSession) {
     btnMinimizeSession.addEventListener("click", () => {
@@ -269,7 +773,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 1. NAVEGAÇÃO DE ABAS
+  // NAVEGAÇÃO
   const navItems = document.querySelectorAll(".nav-item");
   const tabContents = document.querySelectorAll(".tab-content");
   const pageTitle = document.getElementById("page-title");
@@ -295,15 +799,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // 2. TELA HOME
+  // HOME
   const dayNameFullMap = {
-    1: "Segunda-feira",
-    2: "Terça-feira",
-    3: "Quarta-feira",
-    4: "Quinta-feira",
-    5: "Sexta-feira",
-    6: "Sábado",
-    0: "Domingo",
+    1: "Segunda-feira", 2: "Terça-feira", 3: "Quarta-feira",
+    4: "Quinta-feira", 5: "Sexta-feira", 6: "Sábado", 0: "Domingo",
   };
 
   function getNextScheduledWorkout(today) {
@@ -315,9 +814,7 @@ document.addEventListener("DOMContentLoaded", () => {
       checkDate.setDate(checkDate.getDate() + 1);
       const dayOfWeek = checkDate.getDay().toString();
       const found = workouts.find((w) => w.days && w.days.includes(dayOfWeek));
-      if (found) {
-        return { workout: found, dayName: dayNameFullMap[dayOfWeek] };
-      }
+      if (found) return { workout: found, dayName: dayNameFullMap[dayOfWeek] };
     }
     return null;
   }
@@ -330,8 +827,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const currentDayOfWeek = today.getDay();
 
     const monday = new Date(today);
-    const distanceToMonday =
-      (currentDayOfWeek === 0 ? -6 : 1) - currentDayOfWeek;
+    const distanceToMonday = (currentDayOfWeek === 0 ? -6 : 1) - currentDayOfWeek;
     monday.setDate(today.getDate() + distanceToMonday);
 
     const dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -368,9 +864,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const history = DB.getHistory();
 
     const isCompleted = history.includes(dateString);
-    const todayWorkout = workouts.find(
-      (w) => w.days && w.days.includes(dayOfWeek),
-    );
+    const todayWorkout = workouts.find((w) => w.days && w.days.includes(dayOfWeek));
 
     const nextInfo = getNextScheduledWorkout(today);
     let nextWorkoutHtml = "";
@@ -419,7 +913,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // 3. EXECUÇÃO DO TREINO
+  // SESSÃO ATIVA
   const modalSession = document.getElementById("modal-active-session");
   const closeBtnSession = document.querySelector(".close-modal-session");
 
@@ -457,38 +951,26 @@ document.addEventListener("DOMContentLoaded", () => {
       `${workout.exercises ? workout.exercises.length : 0} EXERCÍCIOS`;
 
     const timerEl = document.getElementById("session-timer");
-    if (timerEl && isNewSession) {
-      timerEl.textContent = "00:00";
-    }
-
-    if (isNewSession) {
-      sessionStartTime = Date.now();
-    }
+    if (timerEl && isNewSession) timerEl.textContent = "00:00";
+    if (isNewSession) sessionStartTime = Date.now();
 
     if (!activeSessionTimer) {
       activeSessionTimer = setInterval(() => {
         if (!sessionStartTime || !timerEl) return;
-
-        const diffInSeconds = Math.floor(
-          (Date.now() - sessionStartTime) / 1000,
-        );
+        const diffInSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
         const minutes = String(Math.floor(diffInSeconds / 60)).padStart(2, "0");
         const seconds = String(diffInSeconds % 60).padStart(2, "0");
 
         if (diffInSeconds >= 3600) {
           const hours = String(Math.floor(diffInSeconds / 3600)).padStart(2, "0");
-          const remainingMins = String(
-            Math.floor((diffInSeconds % 3600) / 60),
-          ).padStart(2, "0");
+          const remainingMins = String(Math.floor((diffInSeconds % 3600) / 60)).padStart(2, "0");
           timerEl.textContent = `${hours}:${remainingMins}:${seconds}`;
         } else {
           timerEl.textContent = `${minutes}:${seconds}`;
         }
 
         const miniTimerEl = document.getElementById("minibars-timer");
-        if (miniTimerEl) {
-          miniTimerEl.textContent = timerEl.textContent;
-        }
+        if (miniTimerEl) miniTimerEl.textContent = timerEl.textContent;
       }, 1000);
     }
 
@@ -499,8 +981,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const cardId = `session-card-${idx}`;
         const totalSets = parseInt(exItem.sets) || 3;
 
-        let anatomyContent =
-          '<div class="media-placeholder">Sem Anatomia</div>';
+        let anatomyContent = '<div class="media-placeholder">Sem Anatomia</div>';
         if (found && found.muscleImg) {
           if (found.muscleImg.startsWith("<svg")) {
             anatomyContent = found.muscleImg;
@@ -509,25 +990,18 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
 
-        let executionContent =
-          '<div class="media-placeholder">Sem vídeo cadastrado</div>';
+        let executionContent = '<div class="media-placeholder">Sem vídeo cadastrado</div>';
         if (found && found.executionVideo && found.executionVideo.length > 0) {
-          if (
-            found.executionVideo.endsWith(".mp4") ||
-            found.executionVideo.endsWith(".webm")
-          ) {
+          if (found.executionVideo.endsWith(".mp4") || found.executionVideo.endsWith(".webm")) {
             executionContent = `<video src="${found.executionVideo}" controls loop playsinline></video>`;
           } else {
             executionContent = `<img src="${found.executionVideo}" alt="Demonstração do Exercício" style="max-height:100%; object-fit:contain;">`;
           }
         }
 
-        const thumbUrl =
-          found &&
-          found.executionVideo &&
-          !found.executionVideo.endsWith(".mp4")
-            ? found.executionVideo
-            : "assets/img/peitoral.png";
+        const thumbUrl = found && found.executionVideo && !found.executionVideo.endsWith(".mp4")
+          ? found.executionVideo
+          : "assets/img/peitoral.png";
         const tagsHtml = (found && found.tags ? found.tags.slice(0, 3) : [])
           .map((t) => `<span class="session-tag-pill">${t}</span>`)
           .join("");
@@ -538,9 +1012,11 @@ document.addEventListener("DOMContentLoaded", () => {
           dotsHtml += `<div class="series-dot ${dotClass}" data-step="${s}" onclick="window.toggleSeriesDot(event, this)">${s}</div>`;
         }
 
-        const isExpanded =
-          (isNewSession && idx === 0) ||
+        const isExpanded = (isNewSession && idx === 0) ||
           (!isNewSession && expandedExerciseIndices.includes(idx));
+
+        const currentWeight = DB.getExerciseWeight(exItem.exerciseId) || exItem.weight || 0;
+        const exerciseName = found ? found.name : "Exercício";
 
         return `
         <div class="session-exercise-card ${isExpanded ? "active-expanded" : ""}" id="${cardId}">
@@ -548,7 +1024,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="session-compact-left">
               <img src="${thumbUrl}" alt="Thumb" class="session-thumb-mini">
               <div class="session-compact-info">
-                <strong>${found ? found.name : "Exercício"}</strong>
+                <strong>${exerciseName}</strong>
                 <div class="session-compact-tags">${tagsHtml}</div>
               </div>
             </div>
@@ -582,9 +1058,12 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
 
             <div class="session-metrics-grid">
-              <div class="session-metric-box">
-                <div class="session-metric-value">${DB.getExerciseWeight(exItem.exerciseId) || exItem.weight || 0} kg</div>
-                <div class="session-metric-label">Carga</div>
+              <div class="session-metric-box" 
+                   onclick="event.stopPropagation(); window.openWeightProgressModal('${exItem.exerciseId || ''}', '${exerciseName.replace(/'/g, "\\'")}')"
+                   style="cursor: pointer;"
+                   title="Ver histórico de carga">
+                <div class="session-metric-value" style="color: var(--neon-accent);">${currentWeight} kg</div>
+                <div class="session-metric-label">Carga ⓘ</div>
               </div>
               <div class="session-metric-box">
                 <div class="session-metric-value">${exItem.sets || 0}</div>
@@ -603,18 +1082,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     applySessionProgress();
 
-    const modalSession = document.getElementById("modal-active-session");
-    const minibar = document.getElementById("minimized-workout-bar");
-    
     if (modalSession) modalSession.classList.remove("hidden");
+    const minibar = document.getElementById("minimized-workout-bar");
     if (minibar) minibar.classList.add("hidden");
   }
 
   window.toggleSessionCard = function (cardId) {
     const card = document.getElementById(cardId);
-    if (card) {
-      card.classList.toggle("active-expanded");
-    }
+    if (card) card.classList.toggle("active-expanded");
   };
 
   window.toggleSeriesDot = function (event, dotElement) {
@@ -624,6 +1099,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const currentIndex = dots.indexOf(dotElement);
     const card = dotElement.closest(".session-exercise-card");
     const switchInput = card.querySelector(".exercise-global-switch");
+
+    let startedRestTimer = false;
 
     if (dotElement.classList.contains("completed")) {
       for (let i = currentIndex; i < dots.length; i++) {
@@ -642,9 +1119,17 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         if (switchInput) switchInput.checked = true;
       }
+
+      // NOVO: dispara/reinicia o timer de descanso (não bloqueia nada)
+      startedRestTimer = true;
     }
 
     if (card) syncExerciseProgressFromCard(card);
+
+    // Só dispara quando o usuário CONCLUIU uma série (não ao desmarcar)
+    if (startedRestTimer && typeof RestTimer !== "undefined") {
+      RestTimer.triggerDefault();
+    }
   };
 
   window.toggleSessionDoneGlobal = function (checkbox, cardId) {
@@ -657,6 +1142,7 @@ document.addEventListener("DOMContentLoaded", () => {
           d.classList.add("completed");
           d.innerHTML = SVG_DOT_CHECK;
         });
+        card.classList.remove("active-expanded");
       } else {
         dots.forEach((d, idx) => {
           d.classList.remove("completed");
@@ -665,7 +1151,6 @@ document.addEventListener("DOMContentLoaded", () => {
           else d.classList.remove("active");
         });
       }
-
       syncExerciseProgressFromCard(card);
     }
   };
@@ -692,9 +1177,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('edit-active-reps').value = currentEx.reps || '';
     document.getElementById('edit-active-weight').value = sharedWeight;
 
-    if (modalEditActiveEx) {
-      modalEditActiveEx.classList.remove('hidden');
-    }
+    if (modalEditActiveEx) modalEditActiveEx.classList.remove('hidden');
   };
 
   if (formEditActiveEx) {
@@ -715,9 +1198,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (editedExercise.exerciseId) {
         DB.setExerciseWeight(editedExercise.exerciseId, newWeight);
         activeSessionWorkout.exercises.forEach((ex) => {
-          if (ex.exerciseId === editedExercise.exerciseId) {
-            ex.weight = newWeight;
-          }
+          if (ex.exerciseId === editedExercise.exerciseId) ex.weight = newWeight;
         });
       }
 
@@ -728,26 +1209,15 @@ document.addEventListener("DOMContentLoaded", () => {
           parsedSets,
         );
         sessionExerciseProgress[editedIdx].fullyDone =
-          parsedSets > 0 &&
-          sessionExerciseProgress[editedIdx].completedSets >= parsedSets;
+          parsedSets > 0 && sessionExerciseProgress[editedIdx].completedSets >= parsedSets;
       }
 
-      DB.updateWorkoutExercises(
-        activeSessionWorkout.id,
-        activeSessionWorkout.exercises,
-      );
+      DB.updateWorkoutExercises(activeSessionWorkout.id, activeSessionWorkout.exercises);
 
-      const refreshedWorkout = DB.getWorkouts().find(
-        (w) => w.id === activeSessionWorkout.id,
-      );
-      if (refreshedWorkout) {
-        activeSessionWorkout = refreshedWorkout;
-      }
+      const refreshedWorkout = DB.getWorkouts().find((w) => w.id === activeSessionWorkout.id);
+      if (refreshedWorkout) activeSessionWorkout = refreshedWorkout;
 
-      if (modalEditActiveEx) {
-        modalEditActiveEx.classList.add('hidden');
-      }
-
+      if (modalEditActiveEx) modalEditActiveEx.classList.add('hidden');
       openActiveSessionModal(activeSessionWorkout);
     });
   }
@@ -760,24 +1230,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
       cards.forEach((card) => {
         const dots = card.querySelectorAll(".series-dot");
-        const allDotsCompleted = Array.from(dots).every((d) =>
-          d.classList.contains("completed"),
-        );
+        const allDotsCompleted = Array.from(dots).every((d) => d.classList.contains("completed"));
         if (!allDotsCompleted) allDone = false;
       });
 
       if (!allDone) {
-        alert(
-          "Você precisa concluir todas as séries de todos os exercícios antes de finalizar o treino!",
-        );
+        alert("Você precisa concluir todas as séries de todos os exercícios antes de finalizar o treino!");
         return;
       }
 
-      if (
-        confirm(
-          `Deseja realmente concluir e salvar o treino "${activeSessionWorkout.name}"?`,
-        )
-      ) {
+      if (confirm(`Deseja realmente concluir e salvar o treino "${activeSessionWorkout.name}"?`)) {
         if (activeSessionTimer) {
           clearInterval(activeSessionTimer);
           activeSessionTimer = null;
@@ -785,29 +1247,22 @@ document.addEventListener("DOMContentLoaded", () => {
         sessionStartTime = null;
         sessionExerciseProgress = {};
 
+        // Fecha o timer de descanso ao finalizar a sessão
+        if (typeof RestTimer !== "undefined") RestTimer.close();
+
         const now = new Date();
         const dateStr = now.toISOString().split("T")[0];
-        const timeStr = now.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
+        const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-        const sessionHistory = JSON.parse(
-          localStorage.getItem("my_session_history") || "[]",
-        );
+        const sessionHistory = JSON.parse(localStorage.getItem("my_session_history") || "[]");
         sessionHistory.unshift({
           id: Date.now().toString(),
           workoutName: activeSessionWorkout.name,
           date: dateStr,
           time: timeStr,
-          exercisesCount: activeSessionWorkout.exercises
-            ? activeSessionWorkout.exercises.length
-            : 0,
+          exercisesCount: activeSessionWorkout.exercises ? activeSessionWorkout.exercises.length : 0,
         });
-        localStorage.setItem(
-          "my_session_history",
-          JSON.stringify(sessionHistory),
-        );
+        localStorage.setItem("my_session_history", JSON.stringify(sessionHistory));
 
         let history = DB.getHistory();
         if (!history.includes(dateStr)) {
@@ -816,9 +1271,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         let workouts = DB.getWorkouts();
-        const currentIndex = workouts.findIndex(
-          (w) => w.id === activeSessionWorkout.id,
-        );
+        const currentIndex = workouts.findIndex((w) => w.id === activeSessionWorkout.id);
         if (currentIndex !== -1) {
           workouts[currentIndex] = activeSessionWorkout;
           const completedWorkout = workouts.splice(currentIndex, 1)[0];
@@ -837,16 +1290,12 @@ document.addEventListener("DOMContentLoaded", () => {
   window.startWorkoutSession = function (workoutId) {
     const workouts = DB.getWorkouts();
     const workout = workouts.find((w) => w.id === workoutId);
-    if (workout) {
-      openActiveSessionModal(workout);
-    }
+    if (workout) openActiveSessionModal(workout);
   };
 
   function renderWorkouts() {
     const listEl = document.getElementById("workouts-list");
-    const historyContainerEl = document.getElementById(
-      "workouts-history-container",
-    );
+    const historyContainerEl = document.getElementById("workouts-history-container");
     if (!listEl) return;
 
     const workouts = DB.getWorkouts();
@@ -856,22 +1305,11 @@ document.addEventListener("DOMContentLoaded", () => {
       listEl.innerHTML =
         '<div class="card-boas-vindas" style="grid-column: 1 / -1;"><p style="text-align:center; color:var(--text-muted);">Nenhum treino criado ainda.</p></div>';
     } else {
-      const dayNameMap = {
-        1: "SEG",
-        2: "TER",
-        3: "QUA",
-        4: "QUI",
-        5: "SEX",
-        6: "SÁB",
-        0: "DOM",
-      };
+      const dayNameMap = { 1: "SEG", 2: "TER", 3: "QUA", 4: "QUI", 5: "SEX", 6: "SÁB", 0: "DOM" };
       const categoryImages = {
-        peitoral: "assets/img/peitoral.png",
-        biceps: "assets/img/biceps.png",
-        ombros: "assets/img/ombros.png",
-        costas: "assets/img/costas.png",
-        pernas: "assets/img/pernas.png",
-        gluteos: "assets/img/gluteos.png",
+        peitoral: "assets/img/peitoral.png", biceps: "assets/img/biceps.png",
+        ombros: "assets/img/ombros.png", costas: "assets/img/costas.png",
+        pernas: "assets/img/pernas.png", gluteos: "assets/img/gluteos.png",
         geral: "assets/img/full-body.png",
       };
 
@@ -885,16 +1323,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
           const uniqueTags = Array.from(new Set(allWorkoutTags));
           const tagsHtml = uniqueTags
-            .map(
-              (t) =>
-                `<span class="tag-chip" style="border-color:var(--neon-accent); color:var(--neon-accent);">${t}</span>`,
-            )
+            .map((t) => `<span class="tag-chip" style="border-color:var(--neon-accent); color:var(--neon-accent);">${t}</span>`)
             .join(" ");
-          const dayText =
-            (w.days || []).map((d) => dayNameMap[d] || d).join(", ") ||
-            "SEM DIA";
-          const bgImage =
-            categoryImages[w.category] || "assets/img/peitoral.png";
+          const dayText = (w.days || []).map((d) => dayNameMap[d] || d).join(", ") || "SEM DIA";
+          const bgImage = categoryImages[w.category] || "assets/img/peitoral.png";
           const menuId = `menu-${w.id}`;
           const drawerId = `drawer-${w.id}`;
 
@@ -933,33 +1365,64 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (historyContainerEl) {
-      const sessionHistory = JSON.parse(
-        localStorage.getItem("my_session_history") || "[]",
-      );
+      const sessionHistory = JSON.parse(localStorage.getItem("my_session_history") || "[]");
+
       if (sessionHistory.length === 0) {
         historyContainerEl.innerHTML =
           '<p style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:10px;">Nenhuma sessão concluída ainda.</p>';
       } else {
-        historyContainerEl.innerHTML = sessionHistory
+        const HISTORY_INITIAL_LIMIT = 3;
+        const hasMoreThanLimit = sessionHistory.length > HISTORY_INITIAL_LIMIT;
+        const visibleItems = historyExpanded || !hasMoreThanLimit
+          ? sessionHistory
+          : sessionHistory.slice(0, HISTORY_INITIAL_LIMIT);
+
+        const itemsHtml = visibleItems
           .map((item) => {
             const formattedDate = item.date.split("-").reverse().join("/");
             return `
-            <details class="history-accordion" style="background: var(--card-bg, #1e293b); border: 1px solid var(--card-border, #334155); border-radius: 8px; padding: 12px; color: #fff;">
-              <summary class="history-summary" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600;">
-                <span>${item.workoutName}</span>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span style="font-size: 0.75rem; color: var(--neon-accent);">${formattedDate}</span>
+              <details class="history-accordion" style="background: var(--card-bg, #1e293b); border: 1px solid var(--card-border, #334155); border-radius: 8px; padding: 12px; color: #fff;">
+                <summary class="history-summary" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600;">
+                  <span>${item.workoutName}</span>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 0.75rem; color: var(--neon-accent);">${formattedDate}</span>
+                  </div>
+                </summary>
+                <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted, #94a3b8); border-top: 1px dashed var(--card-border, #334155); padding-top: 8px;">
+                  <div>Data de Realização: <span style="color:#fff;">${formattedDate}</span></div>
+                  <div>Horário de Término: <span style="color:#fff;">${item.time}</span></div>
+                  <div>Exercícios no Bloco: <span style="color:#fff;">${item.exercisesCount || 0} exercícios</span></div>
                 </div>
-              </summary>
-              <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted, #94a3b8); border-top: 1px dashed var(--card-border, #334155); padding-top: 8px;">
-                <div>Data de Realização: <span style="color:#fff;">${formattedDate}</span></div>
-                <div>Horário de Término: <span style="color:#fff;">${item.time}</span></div>
-                <div>Exercícios no Bloco: <span style="color:#fff;">${item.exercisesCount || 0} exercícios</span></div>
-              </div>
-            </details>
-          `;
+              </details>
+            `;
           })
           .join("");
+
+        let toggleButtonHtml = "";
+        if (hasMoreThanLimit) {
+          const hiddenCount = sessionHistory.length - HISTORY_INITIAL_LIMIT;
+          toggleButtonHtml = historyExpanded
+            ? `
+              <button type="button" id="btn-toggle-history" class="btn-see-more-history" style="margin-top: 4px; padding: 10px 14px; background: transparent; border: 1px dashed var(--card-border, #334155); border-radius: 8px; color: var(--neon-accent, #cc00ff); font-weight: 700; font-size: 0.8rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;">
+                Ver menos ▲
+              </button>
+            `
+            : `
+              <button type="button" id="btn-toggle-history" class="btn-see-more-history" style="margin-top: 4px; padding: 10px 14px; background: transparent; border: 1px dashed var(--card-border, #334155); border-radius: 8px; color: var(--neon-accent, #cc00ff); font-weight: 700; font-size: 0.8rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;">
+                Ver mais (${hiddenCount} sessões) ▼
+              </button>
+            `;
+        }
+
+        historyContainerEl.innerHTML = itemsHtml + toggleButtonHtml;
+
+        const toggleBtn = document.getElementById("btn-toggle-history");
+        if (toggleBtn) {
+          toggleBtn.addEventListener("click", () => {
+            historyExpanded = !historyExpanded;
+            renderWorkouts();
+          });
+        }
       }
     }
   }
@@ -975,25 +1438,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.toggleWorkoutDrawer = function (event, drawerId) {
     event.stopPropagation();
-    document
-      .querySelectorAll(".workout-dropdown-menu")
-      .forEach((m) => m.classList.remove("show"));
-
+    document.querySelectorAll(".workout-dropdown-menu").forEach((m) => m.classList.remove("show"));
     document.querySelectorAll(".workout-muscles-drawer").forEach((d) => {
       if (d.id !== drawerId) d.classList.remove("open");
     });
-
     const drawer = document.getElementById(drawerId);
     if (drawer) drawer.classList.toggle("open");
   };
 
   document.addEventListener("click", () => {
-    document
-      .querySelectorAll(".workout-dropdown-menu")
-      .forEach((m) => m.classList.remove("show"));
+    document.querySelectorAll(".workout-dropdown-menu").forEach((m) => m.classList.remove("show"));
   });
 
-  // 5. CALENDÁRIO MENSAL E STREAK
+  // CALENDÁRIO
   let currentCalendarDate = new Date();
 
   const btnPrev = document.getElementById("btn-prev-month");
@@ -1020,10 +1477,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const year = currentCalendarDate.getFullYear();
     const month = currentCalendarDate.getMonth();
 
-    const monthNames = [
-      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-    ];
+    const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
     const monthNameEl = document.getElementById("calendar-month-name");
     if (monthNameEl) monthNameEl.textContent = `${monthNames[month]} ${year}`;
 
@@ -1044,10 +1498,7 @@ document.addEventListener("DOMContentLoaded", () => {
     for (let day = 1; day <= daysInMonth; day++) {
       const dateFormatted = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
       const isCompleted = history.includes(dateFormatted);
-      const isRealToday =
-        day === realToday.getDate() &&
-        month === realToday.getMonth() &&
-        year === realToday.getFullYear();
+      const isRealToday = day === realToday.getDate() && month === realToday.getMonth() && year === realToday.getFullYear();
 
       const cell = document.createElement("div");
       cell.className = `month-day-cell ${isCompleted ? "completed" : ""} ${isRealToday ? "today-cell" : ""}`;
@@ -1071,26 +1522,20 @@ document.addEventListener("DOMContentLoaded", () => {
     btnOpenConfigDays.addEventListener("click", () => {
       const savedDays = DB.getTrainingDays();
       const checkboxes = document.querySelectorAll("#config-target-days input");
-      checkboxes.forEach((cb) => {
-        cb.checked = savedDays.includes(cb.value);
-      });
+      checkboxes.forEach((cb) => cb.checked = savedDays.includes(cb.value));
       modalConfigDays.classList.remove("hidden");
     });
   }
 
   if (closeBtnConfigDays && modalConfigDays) {
-    closeBtnConfigDays.addEventListener("click", () =>
-      modalConfigDays.classList.add("hidden"),
-    );
+    closeBtnConfigDays.addEventListener("click", () => modalConfigDays.classList.add("hidden"));
   }
 
   const formConfigDays = document.getElementById("form-config-days");
   if (formConfigDays) {
     formConfigDays.addEventListener("submit", (e) => {
       e.preventDefault();
-      const selected = Array.from(
-        document.querySelectorAll("#config-target-days input:checked"),
-      ).map((cb) => cb.value);
+      const selected = Array.from(document.querySelectorAll("#config-target-days input:checked")).map((cb) => cb.value);
       DB.saveTrainingDays(selected);
       if (modalConfigDays) modalConfigDays.classList.add("hidden");
       renderFullMonthCalendar();
@@ -1115,15 +1560,12 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderTags() {
     if (!tagsContainer) return;
     tagsContainer.innerHTML = currentExerciseTags
-      .map(
-        (t, index) => `
+      .map((t, index) => `
       <span class="tag-chip">
         ${t}
         <button type="button" onclick="window.removeTag(${index})">&times;</button>
       </span>
-    `,
-      )
-      .join("");
+    `).join("");
   }
 
   window.removeTag = function (index) {
@@ -1165,9 +1607,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const name = nameInput ? nameInput.value.trim() : "";
 
         const anatomeData = await DB.fetchAnatomeData(name);
-        const mergedTags = Array.from(
-          new Set([...currentExerciseTags, ...(anatomeData.tags || [])]),
-        );
+        const mergedTags = Array.from(new Set([...currentExerciseTags, ...(anatomeData.tags || [])]));
 
         DB.saveExercise({
           name,
@@ -1200,26 +1640,19 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const modalWorkout = document.getElementById("modal-add-workout");
-  const containerExWorkout = document.getElementById(
-    "workout-exercises-container",
-  );
+  const containerExWorkout = document.getElementById("workout-exercises-container");
   const btnOpenWorkout = document.getElementById("btn-open-add-workout");
   const modalWorkoutTitle = document.getElementById("modal-workout-title");
 
   function addExerciseRowToForm(exData = null) {
     if (!containerExWorkout) return;
     const library = DB.getExerciseLibrary();
-
-    const sortedLibrary = [...library].sort((a, b) =>
-      a.name.localeCompare(b.name, "pt-BR"),
-    );
+    const sortedLibrary = [...library].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
     const initialExerciseId = exData ? exData.exerciseId : sortedLibrary[0]?.id;
     const initialWeight = initialExerciseId
       ? DB.getExerciseWeight(initialExerciseId) || (exData ? exData.weight : "")
-      : exData
-        ? exData.weight
-        : "";
+      : exData ? exData.weight : "";
 
     const row = document.createElement("div");
     row.className = "exercise-row-form";
@@ -1243,23 +1676,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const syncWeightFieldFromStore = () => {
       const storedWeight = DB.getExerciseWeight(selectExercise.value);
-      if (storedWeight !== "") {
-        weightInput.value = storedWeight;
-      }
+      if (storedWeight !== "") weightInput.value = storedWeight;
     };
 
     selectExercise.addEventListener("change", syncWeightFieldFromStore);
 
     weightInput.addEventListener("change", () => {
       const exerciseId = selectExercise.value;
-      if (exerciseId) {
-        DB.setExerciseWeight(exerciseId, weightInput.value);
-      }
+      if (exerciseId) DB.setExerciseWeight(exerciseId, weightInput.value);
     });
 
-    row
-      .querySelector(".btn-remove-ex")
-      .addEventListener("click", () => row.remove());
+    row.querySelector(".btn-remove-ex").addEventListener("click", () => row.remove());
     containerExWorkout.appendChild(row);
   }
 
@@ -1276,15 +1703,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const closeBtnW = document.querySelector(".close-modal-workout");
   if (closeBtnW && modalWorkout) {
-    closeBtnW.addEventListener("click", () =>
-      modalWorkout.classList.add("hidden"),
-    );
+    closeBtnW.addEventListener("click", () => modalWorkout.classList.add("hidden"));
   }
 
   const btnAddExW = document.getElementById("btn-add-ex-to-workout");
-  if (btnAddExW) {
-    btnAddExW.addEventListener("click", () => addExerciseRowToForm());
-  }
+  if (btnAddExW) btnAddExW.addEventListener("click", () => addExerciseRowToForm());
 
   const formW = document.getElementById("form-workout");
   if (formW) {
@@ -1292,17 +1715,13 @@ document.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       const name = document.getElementById("workout-name").value;
       const category = document.getElementById("workout-category").value;
-      const days = Array.from(
-        document.querySelectorAll("#form-days input:checked"),
-      ).map((cb) => cb.value);
+      const days = Array.from(document.querySelectorAll("#form-days input:checked")).map((cb) => cb.value);
 
       const rows = document.querySelectorAll(".exercise-row-form");
       rows.forEach((r) => {
         const exerciseId = r.querySelector(".select-exercise").value;
         const weight = r.querySelector(".workout-weight").value;
-        if (exerciseId) {
-          DB.setExerciseWeight(exerciseId, weight);
-        }
+        if (exerciseId) DB.setExerciseWeight(exerciseId, weight);
       });
 
       const exercises = Array.from(rows).map((r) => ({
@@ -1312,13 +1731,7 @@ document.addEventListener("DOMContentLoaded", () => {
         weight: r.querySelector(".workout-weight").value,
       }));
 
-      DB.saveWorkout({
-        id: currentEditingWorkoutId,
-        name,
-        category,
-        days,
-        exercises,
-      });
+      DB.saveWorkout({ id: currentEditingWorkoutId, name, category, days, exercises });
 
       formW.reset();
       currentEditingWorkoutId = null;
@@ -1338,8 +1751,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (modalWorkoutTitle) modalWorkoutTitle.textContent = "Editar Treino";
 
     document.getElementById("workout-name").value = workout.name || "";
-    document.getElementById("workout-category").value =
-      workout.category || "geral";
+    document.getElementById("workout-category").value = workout.category || "geral";
 
     const dayCheckboxes = document.querySelectorAll("#form-days input");
     dayCheckboxes.forEach((cb) => {
@@ -1357,9 +1769,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.deleteWorkout = function (workoutId) {
-    if (
-      confirm("Tem certeza que deseja excluir este treino permanentemente?")
-    ) {
+    if (confirm("Tem certeza que deseja excluir este treino permanentemente?")) {
       DB.deleteWorkout(workoutId);
       renderWorkouts();
       renderHome();
@@ -1398,9 +1808,7 @@ function renderExerciseLibrary() {
 
   listEl.innerHTML = exercises
     .map((ex) => {
-      const tagsHtml = (ex.tags || [])
-        .map((t) => `<span class="tag-chip">${t}</span>`)
-        .join(" ");
+      const tagsHtml = (ex.tags || []).map((t) => `<span class="tag-chip">${t}</span>`).join(" ");
       const hasMedia = ex.executionVideo && ex.executionVideo.length > 0;
 
       let anatomyContent = '<div class="media-placeholder">Sem Anatomia</div>';
@@ -1412,13 +1820,9 @@ function renderExerciseLibrary() {
         }
       }
 
-      let executionContent =
-        '<div class="media-placeholder">Sem vídeo cadastrado</div>';
+      let executionContent = '<div class="media-placeholder">Sem vídeo cadastrado</div>';
       if (hasMedia) {
-        if (
-          ex.executionVideo.endsWith(".mp4") ||
-          ex.executionVideo.endsWith(".webm")
-        ) {
+        if (ex.executionVideo.endsWith(".mp4") || ex.executionVideo.endsWith(".webm")) {
           executionContent = `<video src="${ex.executionVideo}" controls loop playsinline></video>`;
         } else {
           executionContent = `<img src="${ex.executionVideo}" alt="Demonstração do Exercício" style="max-height:100%; object-fit:contain;">`;

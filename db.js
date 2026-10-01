@@ -92,7 +92,6 @@ const DB = {
   saveProfile(profile) {
     localStorage.setItem('my_athlete_profile', JSON.stringify(profile));
 
-    // Adiciona um novo ponto no histórico de peso com data e horário a cada alteração
     if (profile.weight !== '' && !isNaN(parseFloat(profile.weight))) {
       let weightHistory = JSON.parse(localStorage.getItem('my_weight_history') || '[]');
       
@@ -209,8 +208,59 @@ const DB = {
 
   setExerciseWeight(exerciseId, weight) {
     if (!exerciseId) return;
+
+    const previousWeight = this.getExerciseWeight(exerciseId);
+
     this._saveExerciseWeightOnly(exerciseId, weight);
     this._syncAllWorkoutsToCentralWeights();
+
+    // NOVO: registra no histórico de progresso de carga sempre que houver mudança
+    if (String(previousWeight ?? '').trim() !== String(weight ?? '').trim()) {
+      this.addWeightProgressEntry(exerciseId, weight);
+    }
+  },
+
+  // ============================================================
+  // NOVO: HISTÓRICO DE PROGRESSO DE CARGA POR EXERCÍCIO
+  // ============================================================
+  getWeightProgressMap() {
+    return JSON.parse(localStorage.getItem('my_weight_progress') || '{}');
+  },
+
+  getWeightProgress(exerciseId) {
+    if (!exerciseId) return [];
+    const map = this.getWeightProgressMap();
+    return map[exerciseId] || [];
+  },
+
+  addWeightProgressEntry(exerciseId, weight) {
+    if (!exerciseId) return;
+    if (weight === '' || weight === null || weight === undefined) return;
+    if (isNaN(parseFloat(weight))) return;
+
+    const numericWeight = parseFloat(weight);
+    const map = this.getWeightProgressMap();
+    const entries = map[exerciseId] || [];
+
+    const now = new Date();
+    const dateLabel = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    const timeLabel = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    // Se o último registro tiver o mesmo peso, não duplica
+    const lastEntry = entries[entries.length - 1];
+    if (lastEntry && Number(lastEntry.weight) === numericWeight) {
+      return;
+    }
+
+    entries.push({
+      weight: numericWeight,
+      date: dateLabel,
+      time: timeLabel,
+      timestamp: Date.now(),
+    });
+
+    map[exerciseId] = entries;
+    localStorage.setItem('my_weight_progress', JSON.stringify(map));
   },
 
   migrateExerciseWeights() {

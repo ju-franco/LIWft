@@ -1276,3 +1276,208 @@ select#workout-category:focus {
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* ============================================================ */
+/* TIMER DE DESCANSO FLUTUANTE (arrastável)                      */
+/* ============================================================ */
+.rest-timer-bubble {
+  position: fixed;
+  top: 100px;         /* posição inicial; sobrescrita via JS */
+  left: 16px;         /* posição inicial; sobrescrita via JS */
+  right: auto;
+  bottom: auto;
+  z-index: 2147483647;
+  width: 148px;       /* era 168px */
+  padding: 10px;      /* era 12px */
+  background: linear-gradient(160deg, #1e1b3a 0%, #141020 100%);
+  border: 1px solid var(--neon-accent, #cc00ff);
+  border-radius: 14px;
+  box-shadow:
+    0 8px 32px rgba(204, 0, 255, 0.25),
+    0 0 0 1px rgba(204, 0, 255, 0.15) inset;
+  color: #fff;
+  font-family: inherit;
+  animation: restTimerIn 0.25s ease-out;
+  transition: opacity 0.2s ease;
+  pointer-events: auto;
+  isolation: isolate;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none; /* evita scroll da página ao arrastar */
+}
+
+.rest-timer-bubble.hidden {
+  display: none;
+}
+
+.rest-timer-bubble.dragging {
+  transition: none;
+  cursor: grabbing;
+  opacity: 0.94;
+  transform: scale(1.02);
+}
+
+.rest-timer-bubble.finished {
+  animation: restTimerPulse 0.6s ease-in-out infinite alternate;
+  border-color: #22c55e;
+  box-shadow: 0 8px 32px rgba(34, 197, 94, 0.5);
+}
+
+@keyframes restTimerIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes restTimerPulse {
+  from { box-shadow: 0 8px 32px rgba(34, 197, 94, 0.3); }
+  to   { box-shadow: 0 8px 40px rgba(34, 197, 94, 0.7); }
+}
+
+.rest-timer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+  cursor: grab;
+  padding: 2px 0;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.rest-timer-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.rest-timer-header:active {
+  cursor: grabbing;
+}
+
+/* Alça visual opcional (bolinhas de "puxar") */
+.rest-timer-header::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.rest-timer-label {
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  color: var(--neon-accent, #cc00ff);
+  text-transform: uppercase;
+}
+
+.rest-timer-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #8e8f96);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.rest-timer-close:hover {
+  color: #ef4444;
+}
+
+.rest-timer-display {
+  font-size: 1.6rem;  /* era 1.9rem */
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 5px;
+  color: #fff;
+  pointer-events: none; /* impede seleção ao arrastar */
+}
+
+.rest-timer-bubble.finished .rest-timer-display {
+  color: #22c55e;
+}
+
+.rest-timer-progress-track {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.rest-timer-progress-bar {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #cc00ff, #ff00aa);
+  transition: width 0.3s linear;
+  border-radius: 3px;
+}
+
+.rest-timer-bubble.finished .rest-timer-progress-bar {
+  background: #22c55e;
+}
+
+.rest-timer-controls {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.rest-timer-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.65rem;
+  padding: 5px 3px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rest-timer-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.rest-timer-btn.primary {
+  background: var(--neon-accent, #cc00ff);
+  border-color: var(--neon-accent, #cc00ff);
+  font-size: 0.85rem;
+}
+
+.rest-timer-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+}
+
+.rest-timer-preset {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted, #8e8f96);
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 3px 2px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rest-timer-preset:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.rest-timer-preset.active {
+  background: rgba(204, 0, 255, 0.15);
+  border-color: var(--neon-accent, #cc00ff);
+  color: var(--neon-accent, #cc00ff);
+}
