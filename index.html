@@ -283,7 +283,7 @@
         </div>
 
         <!-- ============================================================ -->
-        <!-- NOVO: SEÇÃO DE BACKUP / EXPORT / IMPORT                      -->
+        <!-- SEÇÃO DE BACKUP / EXPORT / IMPORT                             -->
         <!-- ============================================================ -->
         <div
           class="calendar-month-card"
@@ -304,22 +304,34 @@
           </p>
 
           <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <!-- BOTÃO EXPORTAR COM SVG -->
             <button
               type="button"
               id="btn-export-data"
               class="btn-primary"
-              style="flex: 1; min-width: 140px; font-size: 0.8rem; padding: 10px;"
+              style="flex: 1; min-width: 140px; font-size: 0.8rem; padding: 10px 14px; gap: 8px;"
             >
-              ⬇ Exportar Dados
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Exportar</span>
             </button>
 
+            <!-- BOTÃO IMPORTAR COM SVG -->
             <button
               type="button"
               id="btn-import-data"
               class="btn-secondary"
-              style="flex: 1; min-width: 140px; font-size: 0.8rem; padding: 10px;"
+              style="flex: 1; min-width: 140px; font-size: 0.8rem; padding: 10px 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 0;"
             >
-              ⬆ Importar Dados
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <span>Importar</span>
             </button>
           </div>
 
@@ -330,6 +342,7 @@
             style="display: none;"
           />
 
+          <!-- BOTÃO APAGAR COM SVG DE ALERTA -->
           <button
             type="button"
             id="btn-wipe-data"
@@ -346,9 +359,18 @@
               cursor: pointer;
               text-transform: uppercase;
               letter-spacing: 0.5px;
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
             "
           >
-            ⚠ Apagar Todos os Dados
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span>Apagar Todos os Dados</span>
           </button>
         </div>
       </div>
@@ -544,7 +566,7 @@
         <div id="modal-edit-active-exercise" class="modal hidden">
           <div class="modal-content">
             <div class="modal-header">
-              <h3>Editar Exercício (Sessão Ativa)</h3>
+              <h3>Editar Exercício</h3>
               <button class="btn-close close-modal-edit-active">&times;</button>
             </div>
             <form id="form-edit-active-exercise">
@@ -603,12 +625,17 @@
     </div>
 
     <!-- ============================================================ -->
-    <!-- NOVO: BOLHA FLUTUANTE DO TIMER DE DESCANSO                   -->
+    <!-- BOLHA FLUTUANTE DO TIMER DE DESCANSO                         -->
     <!-- ============================================================ -->
     <div id="rest-timer-bubble" class="rest-timer-bubble hidden">
       <div class="rest-timer-header">
         <span class="rest-timer-label">DESCANSO</span>
-        <button type="button" id="btn-close-rest-timer" class="rest-timer-close" title="Fechar">×</button>
+        <button type="button" id="btn-close-rest-timer" class="rest-timer-close" title="Fechar">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
 
       <div id="rest-timer-display" class="rest-timer-display">01:30</div>
@@ -619,7 +646,8 @@
 
       <div class="rest-timer-controls">
         <button type="button" class="rest-timer-btn" data-add="15">+15s</button>
-        <button type="button" id="btn-rest-timer-playpause" class="rest-timer-btn primary">⏸</button>
+        <!-- O conteúdo deste botão é trocado dinamicamente via JS (SVG pause/play/refresh) -->
+        <button type="button" id="btn-rest-timer-playpause" class="rest-timer-btn primary"></button>
         <button type="button" class="rest-timer-btn" data-add="30">+30s</button>
       </div>
 

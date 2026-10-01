@@ -12,6 +12,11 @@ const SVG_TRASH = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" s
 const SVG_PENCIL = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
 const SVG_DOT_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 
+// NOVO: SVGs do timer de descanso
+const SVG_PAUSE = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>`;
+const SVG_PLAY = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>`;
+const SVG_REFRESH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
+
 // Registra o Service Worker para habilitar o cache offline e PWA
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -101,7 +106,6 @@ const RestTimer = {
     this.setupDrag();
     this.updateUI();
 
-    // Reposiciona se a janela mudar de tamanho (rotação, teclado, etc)
     window.addEventListener("resize", () => {
       if (!this.bubbleEl.classList.contains("hidden")) {
         this.clampToViewport();
@@ -109,7 +113,6 @@ const RestTimer = {
     });
   },
 
-  // ---------- POSIÇÃO ----------
   restorePosition() {
     try {
       const saved = JSON.parse(localStorage.getItem("my_rest_timer_pos") || "null");
@@ -119,9 +122,7 @@ const RestTimer = {
         this.bubbleEl.style.right = "auto";
         this.bubbleEl.style.bottom = "auto";
       }
-    } catch (e) {
-      // ignora
-    }
+    } catch (e) {}
   },
 
   savePosition() {
@@ -147,13 +148,11 @@ const RestTimer = {
     this.bubbleEl.style.bottom = "auto";
   },
 
-  // ---------- DRAG ----------
   setupDrag() {
     const header = this.bubbleEl.querySelector(".rest-timer-header");
     if (!header) return;
 
     const onPointerDown = (e) => {
-      // Ignora cliques em botões (fechar)
       if (e.target.closest("button")) return;
 
       e.preventDefault();
@@ -168,7 +167,6 @@ const RestTimer = {
 
       this.bubbleEl.classList.add("dragging");
 
-      // Fixa right/bottom para evitar "pulo"
       this.bubbleEl.style.right = "auto";
       this.bubbleEl.style.bottom = "auto";
       this.bubbleEl.style.left = `${rect.left}px`;
@@ -222,7 +220,6 @@ const RestTimer = {
     header.addEventListener("touchstart", onPointerDown, { passive: false });
   },
 
-  // ---------- LÓGICA DO TIMER ----------
   start(seconds) {
     this.totalSeconds = seconds;
     this.remainingSeconds = seconds;
@@ -235,7 +232,6 @@ const RestTimer = {
 
     this.bubbleEl.classList.remove("hidden", "finished");
 
-    // Ao abrir, se ainda não tiver posição salva, define uma posição padrão confortável
     if (!localStorage.getItem("my_rest_timer_pos")) {
       const rect = this.bubbleEl.getBoundingClientRect();
       const defaultX = window.innerWidth - rect.width - 16;
@@ -329,8 +325,15 @@ const RestTimer = {
       this.progressEl.style.width = `${pct}%`;
     }
 
+    // NOVO: usa SVG em vez de emoji
     if (this.playPauseBtnEl) {
-      this.playPauseBtnEl.textContent = this.finished ? "↻" : (this.isRunning ? "⏸" : "▶");
+      if (this.finished) {
+        this.playPauseBtnEl.innerHTML = SVG_REFRESH;
+      } else if (this.isRunning) {
+        this.playPauseBtnEl.innerHTML = SVG_PAUSE;
+      } else {
+        this.playPauseBtnEl.innerHTML = SVG_PLAY;
+      }
     }
   },
 
@@ -357,7 +360,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ============================================================
-  // NOVO: EXPORT / IMPORT / WIPE DE DADOS
+  // EXPORT / IMPORT / WIPE DE DADOS
   // ============================================================
   const btnExportData = document.getElementById("btn-export-data");
   const btnImportData = document.getElementById("btn-import-data");
@@ -491,7 +494,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // GERENCIAMENTO DO MODAL DE PERFIL E GRÁFICO DE PESO
+  // MODAL DE PERFIL E GRÁFICO DE PESO
   const modalProfile = document.getElementById("modal-profile");
   const btnOpenProfile = document.getElementById("btn-open-profile");
   const closeBtnProfile = document.querySelector(".close-modal-profile");
@@ -1120,13 +1123,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (switchInput) switchInput.checked = true;
       }
 
-      // NOVO: dispara/reinicia o timer de descanso (não bloqueia nada)
       startedRestTimer = true;
     }
 
     if (card) syncExerciseProgressFromCard(card);
 
-    // Só dispara quando o usuário CONCLUIU uma série (não ao desmarcar)
     if (startedRestTimer && typeof RestTimer !== "undefined") {
       RestTimer.triggerDefault();
     }
@@ -1247,7 +1248,6 @@ document.addEventListener("DOMContentLoaded", () => {
         sessionStartTime = null;
         sessionExerciseProgress = {};
 
-        // Fecha o timer de descanso ao finalizar a sessão
         if (typeof RestTimer !== "undefined") RestTimer.close();
 
         const now = new Date();

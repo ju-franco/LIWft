@@ -1481,3 +1481,46 @@ select#workout-category:focus {
   border-color: var(--neon-accent, #cc00ff);
   color: var(--neon-accent, #cc00ff);
 }
+
+/* ============================================================ */
+/* AJUSTES DOS SVGs NOS BOTÕES DE BACKUP E TIMER                */
+/* ============================================================ */
+
+/* SVG dentro dos botões de exportar/importar/wipar */
+#btn-export-data svg,
+#btn-import-data svg,
+#btn-wipe-data svg {
+  flex-shrink: 0;
+  display: block;
+}
+
+/* Botão de play/pause/refresh do timer: centralizar SVG */
+#btn-rest-timer-playpause {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+}
+
+#btn-rest-timer-playpause svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+  pointer-events: none;
+}
+
+/* Botão de fechar do timer com SVG pequeno */
+.rest-timer-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  width: 20px;
+  height: 20px;
+}
+
+.rest-timer-close svg {
+  display: block;
+  pointer-events: none;
+}
